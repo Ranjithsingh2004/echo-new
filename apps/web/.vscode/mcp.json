@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "Sentry": {
+      "url": "https://mcp.sentry.dev/mcp/jain-g6/echonew",
+      "type": "http"
+    }
+  }
+}
