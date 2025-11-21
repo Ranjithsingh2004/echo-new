@@ -172,7 +172,7 @@ export const WidgetChatScreen = () => {
 
                 {message.role === "assistant" && (
                 <DicebearAvatar
-                  imageUrl="/logo (1).svg"
+                  imageUrl="/logo.svg"
                   seed="assistant"
                   size={32}
                 />
