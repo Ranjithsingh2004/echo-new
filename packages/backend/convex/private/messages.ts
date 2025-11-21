@@ -30,7 +30,8 @@ export const enhanceResponse = action({
       throw new ConvexError({
         code: "UNAUTHORIZED",
         message: "Organization not found",
-      });
+      }
+    );
     
     }
     const response = await generateText({
