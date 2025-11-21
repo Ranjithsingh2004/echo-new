@@ -2,9 +2,9 @@
 
 import { WidgetHeader } from "@/modules/widget/ui/components/widget-header";
 import { Button} from "@workspace/ui/components/button";
-import { ChevronRightIcon, MessageSquareTextIcon } from "lucide-react";
+import { ChevronRightIcon, MessageSquareTextIcon, MicIcon, PhoneIcon } from "lucide-react";
 import { useSetAtom, useAtomValue } from "jotai";
-import {contactSessionIdAtomFamily,organizationIdAtom,screenAtom,errorMessageAtom,conversationIdAtom} from"../../atoms/widget-atoms";
+import {contactSessionIdAtomFamily,organizationIdAtom,screenAtom,errorMessageAtom,conversationIdAtom, widgetSettingsAtom, hasVapiSecretsAtom} from"../../atoms/widget-atoms";
 import {useMutation} from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { useState } from "react";
@@ -15,6 +15,11 @@ export const WidgetSelectionScreen = () => {
 
   const setScreen = useSetAtom(screenAtom);
   const setErrorMessage = useSetAtom(errorMessageAtom);
+  const widgetSettings =useAtomValue(widgetSettingsAtom);
+  const hasVapiSecrets =useAtomValue(hasVapiSecretsAtom);
+
+
+
 
   const setConversationId = useSetAtom(conversationIdAtom);
   const organizationId = useAtomValue(organizationIdAtom);
@@ -91,6 +96,40 @@ export const WidgetSelectionScreen = () => {
           </div>
           <ChevronRightIcon />
         </Button>
+        {hasVapiSecrets && widgetSettings?.vapiSettings?.assistantId && (
+        <Button
+          className="h-16 w-full justify-between"
+          variant="outline"
+          onClick={() => setScreen("voice")}
+          disabled={isPending}
+
+          
+        
+        >
+          <div className="flex items-center gap-x-2">
+            <MicIcon className="size-4" />
+            <span>Start Voice Call</span>
+          </div>
+          <ChevronRightIcon />
+        </Button>
+        )}
+        {hasVapiSecrets && widgetSettings?.vapiSettings?.phoneNumber && (
+        <Button
+          className="h-16 w-full justify-between"
+          variant="outline"
+          onClick={() => setScreen("contact")}
+          disabled={isPending}
+
+          
+        
+        >
+          <div className="flex items-center gap-x-2">
+            <PhoneIcon className="size-4" />
+            <span>Call us</span>
+          </div>
+          <ChevronRightIcon />
+        </Button>
+        )}
 
         
       </div>
