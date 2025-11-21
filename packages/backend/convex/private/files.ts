@@ -1,12 +1,14 @@
-
 import { ConvexError, v } from "convex/values";
 import {guessMimeTypeFromContents,guessMimeTypeFromExtension} from "@convex-dev/rag";
-import { action, mutation } from "../_generated/server";
+import { action, mutation, query, QueryCtx } from "../_generated/server";
 import { extractTextContent } from "../lib/extractTextContent";
 import rag from "../system/ai/rag";
 import { contentHashFromArrayBuffer } from "@convex-dev/rag";
 import { vEntryId } from "@convex-dev/rag";
 import { Id } from "../_generated/dataModel";
+import { paginationOptsValidator } from "convex/server";
+import { Entry } from "@convex-dev/rag";
+import { EntryId } from "@convex-dev/rag";
 
 function guessMimeType(filename: string, bytes: ArrayBuffer): string {
   return (
@@ -130,20 +132,20 @@ export const addFile = action({
             });
 
             const {entryId,created} = await rag.add(ctx, {
-                // SUPER IMPORTANT: What search space to add t
-                // If not added, it will be considered global
-                namespace: orgId,
-                text,
-                key: filename,
-                title: filename,
-                metadata: {
-                  storageId,
-                  uploadedBy:orgId,
-                  filename,
-                  category:category ?? null,
+  // SUPER IMPORTANT: What search space to add t
+  // If not added, it will be considered global
+  namespace: orgId,
+  text,
+  key: filename,
+  title: filename,
+  metadata: {
+    storageId,
+    uploadedBy:orgId,
+    filename,
+    category:category ?? null,
 
 
-                  },
+     } as EntryMetadata,
      contentHash: await contentHashFromArrayBuffer(bytes)
 
   });
@@ -160,7 +162,156 @@ return {
 
 
  },
-})
+});
+
+export const list = query({
+  args: {
+    category: v.optional(v.string()),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+
+    
+    const identity = await ctx.auth.getUserIdentity();
+    
+        if (identity === null) {
+          throw new ConvexError({
+            code: "UNAUTHORIZED",
+            message: "Identity not found",
+          });
+        }
+    
+        const orgId = identity.orgId as string;
+    
+        if (!orgId) {
+          throw new ConvexError({
+            code: "UNAUTHORIZED",
+            message: "Organization not found",
+          });
+        }
+
+
+// Ensure namespace exists by attempting to get or create it
+try {
+  const namespace = await rag.getNamespace(ctx, {
+    namespace: orgId,
+  });
+
+  if (!namespace) {
+    // Namespace doesn't exist yet, return empty results
+    return { page: [], isDone: true, continueCursor: "" };
+  }
+
+  const results = await rag.list(ctx, {
+    namespaceId: namespace.namespaceId,
+    paginationOpts: args.paginationOpts,
+  });
+
+  const files = await Promise.all(
+    results.page.map((entry) => convertEntryToPublicFile(ctx, entry))
+  );
+
+  const filteredFiles = args.category
+    ? files.filter((file) => file.category === args.category)
+    : files;
+
+  return {
+    page: filteredFiles,
+    isDone: results.isDone,
+    continueCursor: results.continueCursor,
+  };
+} catch (error) {
+  // If getNamespace fails (e.g., due to missing modelId), we need to ensure the namespace
+  // is properly initialized. We can do this by adding a dummy entry and removing it,
+  // or just return empty results if no namespace exists yet.
+  console.error("Error getting namespace:", error);
+  return { page: [], isDone: true, continueCursor: "" };
+}
+  },
+});
+
+export type PublicFile = {
+  id: EntryId,
+  name: string,
+  type: string,
+  size: string,
+  status: "ready" | "processing" | "error",
+  url: string | null,
+  category?: string,
+};
+
+type EntryMetadata = {
+  storageId: Id<"_storage">;
+  uploadedBy: string;
+  filename: string;
+  category: string | null;
+};
+
+
+async function convertEntryToPublicFile(
+  ctx: QueryCtx,
+  entry: Entry,
+): Promise<PublicFile> {
+  const metadata = entry.metadata as EntryMetadata | undefined;
+  const storageId = metadata?.storageId;
+
+  let fileSize = "unknown";
+
+  if (storageId) {
+    try {
+      const storageMetadata = await ctx.db.system.get(storageId);
+      if (storageMetadata) {
+        fileSize = formatFileSize(storageMetadata.size);
+      }
+    }
+    catch (error) {
+  console.error("Failed to get storage metadata: ", error);
+}}
+
+
+    const filename = entry.key || "Unknown";
+const extension = filename.split(".").pop()?.toLowerCase() || "txt";
+
+let status: "ready" | "processing" | "error" = "error";
+if (entry.status === "ready") {
+  status = "ready";
+} else if (entry.status === "pending") {
+  status = "processing";
+}
+
+const url = storageId ? await ctx.storage.getUrl(storageId) : null;
+
+return {
+  id: entry.entryId,
+  name: filename,
+  type: extension,
+  size: fileSize,
+  status,
+  url,
+  category: metadata?.category || undefined,
+}
+
+
+
+
+  };
+
+
+
+    function formatFileSize(bytes: number): string {
+  if (bytes === 0) {
+    return "0 B";
+  }
+
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
+}
+
+
+
             
 
 
