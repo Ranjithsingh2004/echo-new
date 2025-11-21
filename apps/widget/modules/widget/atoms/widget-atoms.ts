@@ -2,7 +2,7 @@ import { atom } from "jotai";
 import { WidgetScreen } from "@/modules/widget/types";
 import { atomFamily, atomWithStorage } from "jotai/utils";
 import { CONTACT_SESSION_KEY } from "../constants";
-import { Id } from "@workspace/backend/_generated/dataModel";
+import { Doc,Id } from "@workspace/backend/_generated/dataModel";
 
 
 // Basic widget state atoms
@@ -15,3 +15,5 @@ export const contactSessionIdAtomFamily = atomFamily((organizationId: string) =>
         null)
 });
 export const conversationIdAtom = atom<Id<"conversations"> | null>(null);
+
+export const widgetSettingsAtom = atom<Doc<"widgetSettings"> | null>(null);
