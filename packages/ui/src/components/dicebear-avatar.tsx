@@ -35,7 +35,7 @@ interface DicebearAvatarProps {
         });
 
         return avatar.toDataUri();
-        }, [seed, size]);
+        }, [seed, size,imageUrl]);
 
         const badgeSize = Math.round(size * 0.5);
 
