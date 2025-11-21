@@ -36,6 +36,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {toast} from "sonner";
 import { Button } from "@workspace/ui/components/button";
+import { VapiConnectedView } from "../components/vapi-connected-view";
 
 
 
@@ -188,7 +189,56 @@ return (
 
 
 };
+const VapiPluginRemoveForm = ({
+  open,
+  setOpen,
+}: {
+  open: boolean;
+  setOpen: (value: boolean) => void;
+}) => {
+  const removePlugin = useMutation(api.private.plugins.remove);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // No args — it's a click handler, not a form submit
+  const handleRemove = async () => {
+    try {
+      setIsSubmitting(true);
+      await removePlugin({
+        service: "vapi",
+      });
+      setOpen(false);
+      toast.success("Vapi Plugin removed");
+    } catch (error) {
+      console.error(error);
+      toast.error("Something went wrong");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Disconnect Vapi</DialogTitle>
+        </DialogHeader>
+        <DialogDescription>
+          Are you sure you want to Disconnect VAPI ?
+        </DialogDescription>
+
+        <DialogFooter>
+          <Button
+            onClick={handleRemove}
+            variant="destructive"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Disconnecting..." : "Disconnect"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 
 
@@ -219,19 +269,11 @@ const handleSubmit = () => {
 };
 
 
-     
-
-
-
-
-
-
-
-
   return (
     <>
 
     <VapiPluginForm open = {connectOpen} setOpen={setConnectOpen}/>
+    <VapiPluginRemoveForm open = {removeOpen} setOpen={setRemoveOpen} />
     <div className="flex min-h-screen flex-col bg-muted p-8">
       <div className="mx-auto w-full max-w-screen-md">
         <div className="space-y-2">
@@ -243,7 +285,7 @@ const handleSubmit = () => {
         <div className="mt-8">
 
             {vapiPlugin ?(
-                <p>Connected!</p>
+                <VapiConnectedView onDisconnect={handleSubmit} />
             ):(
 
             
