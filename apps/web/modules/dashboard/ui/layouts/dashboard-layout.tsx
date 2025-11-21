@@ -25,4 +25,5 @@ export const DashboardLayout = async  ({ children }: { children: React.ReactNode
       </OrganizationGuard>
     </AuthGuard>
   );
+
 };
