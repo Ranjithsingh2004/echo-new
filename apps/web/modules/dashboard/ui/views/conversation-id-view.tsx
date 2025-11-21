@@ -36,6 +36,7 @@ import { ConversationStatusButton } from "../components/conversation-status-butt
 import { useState } from "react";
 import { cn } from "@workspace/ui/lib/utils";
 import { Skeleton } from "@workspace/ui/components/skeleton";
+import { toast } from "sonner";
 
 
 
@@ -96,6 +97,7 @@ const handleEnhanceResponse = async () => {
 
     form.setValue("message",response);
   } catch (error) {
+    toast.error("Failed to enhance response.");
     console.error(error);
   }finally{
 
