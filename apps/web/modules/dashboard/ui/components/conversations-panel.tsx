@@ -13,7 +13,7 @@ import {ScrollArea} from "@workspace/ui/components/scroll-area"
 import { api } from "@workspace/backend/_generated/api";
 import { usePaginatedQuery } from "convex/react";
 import { getCountryFromTimezone } from "@/lib/country-utils";
-import Link from "next/Link";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@workspace/ui/lib/utils";
 import { DicebearAvatar } from "@workspace/ui/components/dicebear-avatar";
