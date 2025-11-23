@@ -14,6 +14,7 @@ import type * as lib_extractTextContent from "../lib/extractTextContent.js";
 import type * as lib_generateCaseId from "../lib/generateCaseId.js";
 import type * as lib_secrets from "../lib/secrets.js";
 import type * as private_contactSessions from "../private/contactSessions.js";
+import type * as private_conversationExports from "../private/conversationExports.js";
 import type * as private_conversations from "../private/conversations.js";
 import type * as private_files from "../private/files.js";
 import type * as private_messages from "../private/messages.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "lib/generateCaseId": typeof lib_generateCaseId;
   "lib/secrets": typeof lib_secrets;
   "private/contactSessions": typeof private_contactSessions;
+  "private/conversationExports": typeof private_conversationExports;
   "private/conversations": typeof private_conversations;
   "private/files": typeof private_files;
   "private/messages": typeof private_messages;

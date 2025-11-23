@@ -1,9 +1,15 @@
-import { mutation,query } from "../_generated/server";
+import { action, mutation, query } from "../_generated/server";
 import { ConvexError, v } from "convex/values";
 import { supportAgent } from "../system/ai/agents/supportAgent";
 import { MessageDoc,saveMessage } from "@convex-dev/agent";
 import { paginationOptsValidator, PaginationResult } from "convex/server";
 import { Doc } from "../_generated/dataModel";
+
+const WORKFLOW_WEBHOOK_URL =
+  "https://workflows.spinabot.com/api/webhooks/webhook?workflowId=cmibvtewu0001k004e4a4qke6";
+
+const loadInternalApi = async (): Promise<any> =>
+  (await import("../_generated/api")).internal;
 
 
 export const updateStatus = mutation({
@@ -303,6 +309,47 @@ export const exportToJson = mutation({
     });
 
     return jsonString;
+  },
+});
+
+export const exportJsonAndNotify = action({
+  args: {
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    const internalApi = await loadInternalApi();
+    const jsonString = await ctx.runMutation(
+      internalApi.private.conversations.exportToJson,
+      args,
+    );
+
+    let webhookPosted = false;
+    try {
+      const parsed = JSON.parse(jsonString);
+      const payload = {
+        conversationId: args.conversationId,
+        caseId: parsed.conversationDetails?.caseId ?? null,
+        exportedAt: parsed.exportInfo?.exportedAt ?? new Date().toISOString(),
+        data: parsed,
+      };
+
+      const response = await fetch(WORKFLOW_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      webhookPosted = response.ok;
+      if (!response.ok) {
+        console.error(
+          `Failed to forward export to workflow webhook: ${response.status} ${response.statusText}`,
+        );
+      }
+    } catch (error) {
+      console.error("Error forwarding export to workflow webhook", error);
+    }
+
+    return { jsonString, webhookPosted };
   },
 });
 

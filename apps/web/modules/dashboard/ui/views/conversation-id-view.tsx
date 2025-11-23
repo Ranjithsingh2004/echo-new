@@ -175,15 +175,20 @@ const handleEnhanceResponse = async () => {
     const [exportedJson, setExportedJson] = useState<string | null>(null);
     const [isJsonDialogOpen, setIsJsonDialogOpen] = useState(false);
 
-    const exportToJson = useMutation(api.private.conversations.exportToJson);
+    const exportToJson = useAction(
+      api.private.conversations.exportJsonAndNotify,
+    );
 
     const handleExportJson = async () => {
       setIsExporting(true);
       try {
-        const jsonString = await exportToJson({ conversationId });
+        const { jsonString, webhookPosted } = await exportToJson({ conversationId });
         setExportedJson(jsonString);
         setIsJsonDialogOpen(true);
         toast.success("Conversation exported to JSON successfully!");
+        if (webhookPosted) {
+          toast.success("Workflow webhook notified successfully!");
+        }
       } catch (error) {
         console.error(error);
         toast.error("Failed to export conversation");
