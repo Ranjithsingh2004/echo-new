@@ -4,6 +4,7 @@ import { supportAgent } from "../system/ai/agents/supportAgent";
 import { MessageDoc,saveMessage } from "@convex-dev/agent";
 import { components, internal } from "../_generated/api";
 import { paginationOptsValidator } from "convex/server";
+import { generateCaseId } from "../lib/generateCaseId";
 
 export const getMany = query({
   args: {
@@ -46,6 +47,7 @@ export const getMany = query({
             status: conversation.status,
             organizationId: conversation.organizationId,
             threadId: conversation.threadId,
+            caseId: conversation.caseId,
             lastMessage,
           };
 
@@ -112,6 +114,7 @@ export const getOne = query({
         _id: conversation._id,
         status: conversation.status,
         threadId: conversation.threadId,
+        caseId: conversation.caseId,
     };
 
 
@@ -167,11 +170,14 @@ export const create = mutation({
 
 
 
+    const caseId = generateCaseId();
+
     const conversationId = await ctx.db.insert("conversations", {
         contactSessionId: session._id,
         status: "unresolved",
         organizationId: args.organizationId,
         threadId,
+        caseId,
     });
 
     return conversationId;

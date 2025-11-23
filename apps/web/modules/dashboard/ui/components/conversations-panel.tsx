@@ -165,6 +165,11 @@ export const ConversationsPanel = () => {
                             </span>
 
                         </div>
+                        {conversation.caseId && (
+                          <div className="text-muted-foreground text-xs mt-0.5">
+                            Case ID: {conversation.caseId}
+                          </div>
+                        )}
 
                         <div className="mt-1 flex items-center justify-between gap-2">
                         <div className="flex w-0 grow items-center gap-1">

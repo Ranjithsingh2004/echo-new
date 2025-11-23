@@ -2,7 +2,6 @@ import { mutation,query } from "../_generated/server";
 import { ConvexError, v } from "convex/values";
 import { supportAgent } from "../system/ai/agents/supportAgent";
 import { MessageDoc,saveMessage } from "@convex-dev/agent";
-import { components } from "../_generated/api";
 import { paginationOptsValidator, PaginationResult } from "convex/server";
 import { Doc } from "../_generated/dataModel";
 
@@ -208,13 +207,102 @@ export const getMany = query({
           page: validConversations,
         };
 
-                        
 
 
 
-          
+
+
 
 
  },
+});
+
+export const exportToJson = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (identity === null) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Identity not found",
+      });
+    }
+    const orgId = identity.orgId as string;
+
+    if (!orgId) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Organization not found",
+      });
+    }
+
+    const conversation = await ctx.db.get(args.conversationId);
+
+    if (!conversation) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Conversation not found"
+      });
+    }
+
+    if (conversation.organizationId !== orgId) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Invalid Organization ID"
+      });
+    }
+
+    const contactSession = await ctx.db.get(conversation.contactSessionId);
+
+    if (!contactSession) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Contact Session not found"
+      });
+    }
+
+    // Get messages in smaller batches to avoid timeout
+    const messagesPage = await supportAgent.listMessages(ctx, {
+      threadId: conversation.threadId,
+      paginationOpts: { numItems: 50, cursor: null },
+    });
+
+    // Build clean JSON object focused on conversation content
+    const conversationJson = {
+      conversationDetails: {
+        caseId: conversation.caseId,
+        status: conversation.status,
+        customerName: contactSession.name,
+        customerEmail: contactSession.email,
+        createdAt: new Date(conversation._creationTime).toISOString(),
+      },
+      messages: messagesPage.page.reverse().map((msg) => {
+        const role = msg.message?.role || "unknown";
+        return {
+          from: role === "user" ? "Customer" : "Assistant",
+          message: msg.text || "",
+        };
+      }),
+      exportInfo: {
+        totalMessages: messagesPage.page.length,
+        hasMoreMessages: messagesPage.continueCursor !== null,
+        exportedAt: new Date().toISOString(),
+        exportedBy: identity.email || identity.subject,
+      },
+    };
+
+    // Convert to JSON string
+    const jsonString = JSON.stringify(conversationJson, null, 2);
+
+    // Store in database
+    await ctx.db.patch(args.conversationId, {
+      json: jsonString,
+    });
+
+    return jsonString;
+  },
 });
 

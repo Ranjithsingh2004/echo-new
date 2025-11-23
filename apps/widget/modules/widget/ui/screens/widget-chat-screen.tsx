@@ -144,29 +144,35 @@ export const WidgetChatScreen = () => {
 
   return (
     <>
-      <WidgetHeader className="flex items-center justify-between">
-        <div className="flex items-center gap-x-2">
+      <WidgetHeader className="flex flex-col items-start gap-y-1">
+        <div className="flex w-full items-center justify-between">
+          <div className="flex items-center gap-x-2">
+            <Button
+              size ="icon"
+              variant="transparent"
+              onClick={onBack}
+
+            >
+              <ArrowLeft />
+
+
+            </Button>
+            <p>Chat</p>
+
+
+          </div>
           <Button
-            size ="icon"
+            size="icon"
             variant="transparent"
-            onClick={onBack}
-          
           >
-            <ArrowLeft />
-
-
+            <MenuIcon />
           </Button>
-          <p>Chat</p>
-            
-
         </div>
-        <Button
-          size="icon"
-          variant="transparent"
-        >
-          <MenuIcon />
-        </Button>
-        
+        {conversation?.caseId && (
+          <div className="ml-12 text-xs text-muted-foreground">
+            Case ID: {conversation.caseId}
+          </div>
+        )}
       </WidgetHeader>
       <AIConversation>
         <AIConversationContent>

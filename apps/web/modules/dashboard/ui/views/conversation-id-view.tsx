@@ -7,7 +7,7 @@ import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { Button } from "@workspace/ui/components/button";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { MoreHorizontal , MoreHorizontalIcon, Wand2Icon} from "lucide-react";
+import { MoreHorizontal , MoreHorizontalIcon, Wand2Icon, FileJsonIcon, DownloadIcon, CopyIcon} from "lucide-react";
 import {
   AIConversation,
   AIConversationContent,
@@ -27,8 +27,8 @@ import {
 } from "@workspace/ui/components/ai/message";
 import { AIResponse } from "@workspace/ui/components/ai/response";
 import { Form, FormField } from "@workspace/ui/components/form";
-import { z } from "zod"; 
-import { useForm } from "react-hook-form"; 
+import { z } from "zod";
+import { useForm } from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {toUIMessages,useThreadMessages} from "@convex-dev/agent/react";
 import { DicebearAvatar } from "@workspace/ui/components/dicebear-avatar";
@@ -37,6 +37,15 @@ import { useState } from "react";
 import { cn } from "@workspace/ui/lib/utils";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@workspace/ui/components/dialog";
+import { ScrollArea } from "@workspace/ui/components/scroll-area";
 
 
 
@@ -162,6 +171,49 @@ const handleEnhanceResponse = async () => {
 
     };
 
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportedJson, setExportedJson] = useState<string | null>(null);
+    const [isJsonDialogOpen, setIsJsonDialogOpen] = useState(false);
+
+    const exportToJson = useMutation(api.private.conversations.exportToJson);
+
+    const handleExportJson = async () => {
+      setIsExporting(true);
+      try {
+        const jsonString = await exportToJson({ conversationId });
+        setExportedJson(jsonString);
+        setIsJsonDialogOpen(true);
+        toast.success("Conversation exported to JSON successfully!");
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to export conversation");
+      } finally {
+        setIsExporting(false);
+      }
+    };
+
+    const handleCopyJson = () => {
+      if (exportedJson) {
+        navigator.clipboard.writeText(exportedJson);
+        toast.success("JSON copied to clipboard!");
+      }
+    };
+
+    const handleDownloadJson = () => {
+      if (exportedJson) {
+        const blob = new Blob([exportedJson], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `conversation-${conversation?.caseId || conversationId}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success("JSON downloaded!");
+      }
+    };
+
     if (conversation === undefined || messages.status === "LoadingFirstPage") {
       return <ConversationIdViewLoading />
     }
@@ -181,23 +233,82 @@ const handleEnhanceResponse = async () => {
 
   return (
     <div className="flex h-full flex-col bg-muted">
-    <header className="flex items-center justify-between border-b bg-background p-2.5">
-        <Button
-            size="sm"
-            variant="ghost"
-        >
-            <MoreHorizontalIcon />
-        </Button>
+    <header className="flex flex-col border-b bg-background">
+      <div className="flex items-center justify-between p-2.5">
+        <div className="flex items-center gap-2">
+          <Button
+              size="sm"
+              variant="ghost"
+          >
+              <MoreHorizontalIcon />
+          </Button>
+          <Dialog open={isJsonDialogOpen} onOpenChange={setIsJsonDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportJson}
+                disabled={isExporting}
+              >
+                <FileJsonIcon className="mr-2 h-4 w-4" />
+                {isExporting ? "Exporting..." : "Export JSON"}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl h-[85vh] flex flex-col gap-0 p-0">
+              <div className="flex flex-col gap-2 p-6 pb-4 border-b">
+                <DialogHeader className="p-0">
+                  <DialogTitle className="text-lg font-semibold">Conversation JSON Export</DialogTitle>
+                  <DialogDescription className="text-sm">
+                    Complete conversation data including all messages and metadata
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyJson}
+                    className="flex-1"
+                  >
+                    <CopyIcon className="mr-2 h-4 w-4" />
+                    Copy to Clipboard
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleDownloadJson}
+                    className="flex-1"
+                  >
+                    <DownloadIcon className="mr-2 h-4 w-4" />
+                    Download JSON
+                  </Button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-hidden p-6 pt-4">
+                <div className="h-full w-full rounded-lg border bg-slate-50 dark:bg-slate-950 overflow-auto">
+                  <pre className="text-xs p-4 font-mono leading-relaxed whitespace-pre-wrap break-words min-h-full">
+                    {exportedJson}
+                  </pre>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
         {!!conversation &&(
         <ConversationStatusButton
           onClick = {handleToggleStatus}
           status={conversation?.status}
           disabled = {isUpdatingStatus}
-          
 
-        
+
+
         />
         )}
+      </div>
+      {conversation?.caseId && (
+        <div className="px-2.5 pb-2.5 text-muted-foreground text-sm">
+          Case ID: {conversation.caseId}
+        </div>
+      )}
     </header>
      {/* 1 */}
      <AIConversation className="max-h-[calc(100vh-180px)]">

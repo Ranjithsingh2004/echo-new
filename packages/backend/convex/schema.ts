@@ -45,6 +45,8 @@ export default defineSchema({
         threadId: v.string(),
         organizationId: v.string(),
         contactSessionId: v.id("contactSessions"),
+        caseId: v.optional(v.string()),
+        json: v.optional(v.string()),
         status: v.union(
             v.literal("unresolved"),
             v.literal("escalated"),
@@ -54,7 +56,8 @@ export default defineSchema({
             .index("by_organization_id", ["organizationId"])
             .index("by_contact_session_id", ["contactSessionId"])
             .index("by_thread_id", ["threadId"])
-            .index("by_status_and_organization_id", ["status", "organizationId"]),
+            .index("by_status_and_organization_id", ["status", "organizationId"])
+            .index("by_case_id", ["caseId"]),
 
 
 
