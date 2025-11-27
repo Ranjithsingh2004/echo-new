@@ -130,6 +130,7 @@ export const create = mutation({
   args: {
     organizationId: v.string(),
     contactSessionId: v.id("contactSessions"),
+    chatbotId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.contactSessionId);
@@ -146,12 +147,52 @@ export const create = mutation({
           contactSessionId: args.contactSessionId,
         });
 
-          const widgetSettings = await ctx.db
-        .query("widgetSettings")
-        .withIndex("by_organization_id", (q) =>
-          q.eq("organizationId", args.organizationId),
-        )
+    // Determine which chatbot to use
+    let chatbotToUse = null;
+    let greetMessage = "Hello, how can I help you?";
+
+    console.log("[conversations.create] Received chatbotId:", args.chatbotId);
+    console.log("[conversations.create] Organization ID:", args.organizationId);
+
+    if (args.chatbotId) {
+      // Use specified chatbot
+      const cbId = args.chatbotId;
+      console.log("[conversations.create] Querying for chatbot with ID:", cbId);
+      chatbotToUse = await ctx.db
+        .query("chatbots")
+        .withIndex("by_chatbot_id", (q) => q.eq("chatbotId", cbId))
         .unique();
+
+      console.log("[conversations.create] Found chatbot:", chatbotToUse ? chatbotToUse.name : "null");
+      console.log("[conversations.create] Chatbot KB ID:", chatbotToUse?.knowledgeBaseId);
+
+      if (chatbotToUse && chatbotToUse.organizationId === args.organizationId) {
+        greetMessage = chatbotToUse.greetMessage;
+      }
+    } else {
+      // Use default chatbot
+      chatbotToUse = await ctx.db
+        .query("chatbots")
+        .withIndex("by_organization_id", (q) => q.eq("organizationId", args.organizationId))
+        .filter((q) => q.eq(q.field("isDefault"), true))
+        .first();
+
+      if (chatbotToUse) {
+        greetMessage = chatbotToUse.greetMessage;
+      } else {
+        // Fallback: widgetSettings for backward compatibility
+        const widgetSettings = await ctx.db
+          .query("widgetSettings")
+          .withIndex("by_organization_id", (q) =>
+            q.eq("organizationId", args.organizationId),
+          )
+          .unique();
+
+        if (widgetSettings) {
+          greetMessage = widgetSettings.greetMessage;
+        }
+      }
+    }
 
 
     const { threadId } = await supportAgent.createThread(ctx, {
@@ -162,7 +203,7 @@ export const create = mutation({
       threadId,
       message: {
         role: "assistant",
-        content: widgetSettings?.greetMessage || "Hello, how can I help you?",
+        content: greetMessage,
       },
     });
 
@@ -176,6 +217,7 @@ export const create = mutation({
         contactSessionId: session._id,
         status: "unresolved",
         organizationId: args.organizationId,
+        chatbotId: chatbotToUse?._id,
         threadId,
         caseId,
     });

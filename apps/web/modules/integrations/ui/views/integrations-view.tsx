@@ -19,17 +19,22 @@ import {
 } from "@workspace/ui/components/dialog";
 import { useState } from "react";
 import { createScript } from "../../utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import { useQuery } from "convex/react";
+import { api } from "@workspace/backend/_generated/api";
 
 
 export const IntegrationsView = () => {
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [selectedSnippet, setSelectedSnippet] = useState("");
-    
+    const [selectedChatbotId, setSelectedChatbotId] = useState<string>("default");
+
 
 
 
     const {organization} = useOrganization();
+    const chatbots = useQuery(api.private.chatbots.list);
 
     const handleIntegrationClick = (integrationId: IntegrationId) => {
         if (!organization) {
@@ -37,12 +42,12 @@ export const IntegrationsView = () => {
             return;
         }
 
-        const snippet = createScript(integrationId, organization.id);
+        const snippet = createScript(integrationId, organization.id, selectedChatbotId);
         setSelectedSnippet(snippet);
         setDialogOpen(true);
         };
 
-    const handleCopy = async () => {
+    const handleCopyOrgId = async () => {
     try {
         await navigator.clipboard.writeText(organization?.id ?? "");
         toast.success("Copied to clipboard");
@@ -50,6 +55,18 @@ export const IntegrationsView = () => {
         toast.error("Failed to copy to clipboard");
     }
     };
+
+    const handleCopyChatbotId = async () => {
+    try {
+        const chatbotId = selectedChatbot?.chatbotId ?? "";
+        await navigator.clipboard.writeText(chatbotId);
+        toast.success("Copied to clipboard");
+    } catch {
+        toast.error("Failed to copy to clipboard");
+    }
+    };
+
+    const selectedChatbot = chatbots?.find(c => c.chatbotId === selectedChatbotId);
 
 
 
@@ -85,17 +102,59 @@ export const IntegrationsView = () => {
             />
             <Button
                 className="gap-2"
-                onClick={handleCopy}
+                onClick={handleCopyOrgId}
                 size="sm"
                 >
                 <CopyIcon className="size-4" />
                 Copy
                 </Button>
+        </div>
 
+        <div className="space-y-3">
+            <div className="flex items-center gap-4">
+                <Label className="w-34" htmlFor="chatbot-select">
+                Chatbot
+                </Label>
+                <Select
+                    value={selectedChatbotId}
+                    onValueChange={setSelectedChatbotId}
+                >
+                    <SelectTrigger id="chatbot-select" className="flex-1">
+                        <SelectValue placeholder="Select chatbot" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="default">Default Chatbot</SelectItem>
+                        {chatbots && chatbots.map((chatbot) => (
+                            <SelectItem key={chatbot._id} value={chatbot.chatbotId}>
+                                {chatbot.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
 
-
-
-
+            {selectedChatbotId !== "default" && selectedChatbot && (
+                <div className="flex items-center gap-4">
+                    <Label className="w-34" htmlFor="chatbot-id">
+                    Chatbot ID
+                    </Label>
+                    <Input
+                    disabled
+                    id="chatbot-id"
+                    readOnly
+                    value={selectedChatbot.chatbotId}
+                    className="flex-1 bg-background font-mono text-sm"
+                    />
+                    <Button
+                        className="gap-2"
+                        onClick={handleCopyChatbotId}
+                        size="sm"
+                        >
+                        <CopyIcon className="size-4" />
+                        Copy
+                        </Button>
+                </div>
+            )}
         </div>
         </div>
 

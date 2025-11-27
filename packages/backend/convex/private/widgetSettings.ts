@@ -5,7 +5,13 @@ import { mutation, query } from "../_generated/server";
 
 export const upsert = mutation({
   args: {
+    chatbotName: v.optional(v.string()),
     greetMessage: v.string(),
+    customSystemPrompt: v.optional(v.string()),
+    appearance: v.optional(v.object({
+      primaryColor: v.optional(v.string()),
+      size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+    })),
     defaultSuggestions: v.object({
       suggestion1: v.optional(v.string()),
       suggestion2: v.optional(v.string()),
@@ -42,14 +48,20 @@ export const upsert = mutation({
 
     if (existingWidgetSettings) {
       await ctx.db.patch(existingWidgetSettings._id, {
+        chatbotName: args.chatbotName,
         greetMessage: args.greetMessage,
+        customSystemPrompt: args.customSystemPrompt,
+        appearance: args.appearance,
         defaultSuggestions: args.defaultSuggestions,
         vapiSettings: args.vapiSettings,
       });
     }else {
       await ctx.db.insert("widgetSettings", {
         organizationId: orgId,
+        chatbotName: args.chatbotName,
         greetMessage: args.greetMessage,
+        customSystemPrompt: args.customSystemPrompt,
+        appearance: args.appearance,
         defaultSuggestions: args.defaultSuggestions,
         vapiSettings: args.vapiSettings,
       });

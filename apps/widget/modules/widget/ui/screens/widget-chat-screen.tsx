@@ -157,7 +157,7 @@ export const WidgetChatScreen = () => {
 
 
             </Button>
-            <p>Chat</p>
+            <p>{widgetSettings?.chatbotName || "Support Assistant"}</p>
 
 
           </div>

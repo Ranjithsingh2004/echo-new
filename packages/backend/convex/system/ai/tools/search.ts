@@ -29,9 +29,39 @@ if (!conversation) {
 
 const orgId = conversation.organizationId;
 
+console.log("[search] Conversation chatbotId:", conversation.chatbotId);
+
+// Determine which namespace to use based on chatbot's knowledge base
+let namespace = orgId; // Default fallback
+
+if (conversation.chatbotId) {
+  console.log("[search] Fetching chatbot with _id:", conversation.chatbotId);
+  const chatbot = await ctx.runQuery(internal.system.chatbots.getById, {
+    id: conversation.chatbotId,
+  });
+
+  console.log("[search] Found chatbot:", chatbot ? chatbot.name : "null");
+
+  if (chatbot) {
+    console.log("[search] Chatbot knowledgeBaseId:", chatbot.knowledgeBaseId);
+    const knowledgeBase = await ctx.runQuery(internal.system.knowledgeBases.getById, {
+      id: chatbot.knowledgeBaseId,
+    });
+
+    console.log("[search] Found KB:", knowledgeBase ? knowledgeBase.name : "null");
+
+    if (knowledgeBase) {
+      namespace = knowledgeBase.ragNamespace;
+      console.log("[search] Using KB namespace:", namespace);
+    }
+  }
+} else {
+  console.log("[search] No chatbotId, using default orgId namespace:", namespace);
+}
+
 
 const searchResult = await rag.search(ctx, {
-  namespace: orgId,
+  namespace: namespace,
   query: args.query,
   limit: 5,
 });

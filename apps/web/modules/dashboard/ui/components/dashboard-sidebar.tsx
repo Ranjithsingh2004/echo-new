@@ -2,7 +2,9 @@
 
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import {
+    BotIcon,
     CreditCardIcon,
+    DatabaseIcon,
     InboxIcon,
     LayoutDashboardIcon,
     LibraryBigIcon,
@@ -35,7 +37,17 @@ const customerSupportItems = [
     icon: InboxIcon,
   },
   {
-    title: "Knowledge Base",
+    title: "Chatbots",
+    url: "/chatbots",
+    icon: BotIcon,
+  },
+  {
+    title: "Knowledge Bases",
+    url: "/knowledge-bases",
+    icon: DatabaseIcon,
+  },
+  {
+    title: "Files",
     url: "/files",
     icon: LibraryBigIcon,
   },

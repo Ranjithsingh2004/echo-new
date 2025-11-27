@@ -1,6 +1,6 @@
 "use client";
 
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import {
   Dropzone,
   DropzoneContent,
@@ -32,12 +33,14 @@ export const UploadDialog = ({
   onFileUploaded,
 }: UploadDialogProps) => {
   const addFile = useAction(api.private.files.addFile);
+  const knowledgeBases = useQuery(api.private.knowledgeBases.list);
 
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 const [isUploading, setIsUploading] = useState(false);
 const [uploadForm, setUploadForm] = useState({
   category: "",
   filename: "",
+  knowledgeBaseId: "",
 });
 
 const handleFileDrop = (acceptedFiles: File[]) => {
@@ -66,6 +69,7 @@ const handleUpload = async () => {
       filename,
       mimeType: blob.type || "text/plain",
       category: uploadForm.category,
+      knowledgeBaseId: uploadForm.knowledgeBaseId || undefined,
     });
 
     onFileUploaded?.();
@@ -88,6 +92,7 @@ const handleCancel = () => {
   setUploadForm({
     category: "",
     filename: "",
+    knowledgeBaseId: "",
   });
 }
 
@@ -115,6 +120,27 @@ return (
       </DialogHeader>
 
       <div className="space-y-4">
+
+      <div className="space-y-2">
+  <Label htmlFor="knowledgeBase">
+    Knowledge Base (Optional)
+  </Label>
+  <Select
+    value={uploadForm.knowledgeBaseId}
+    onValueChange={(value) => setUploadForm((prev) => ({ ...prev, knowledgeBaseId: value }))}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder="Select knowledge base (or use default)" />
+    </SelectTrigger>
+    <SelectContent>
+      {knowledgeBases && knowledgeBases.map((kb) => (
+        <SelectItem key={kb._id} value={kb.knowledgeBaseId}>
+          {kb.name}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
 
       <div className="space-y-2">
   <Label htmlFor="category">

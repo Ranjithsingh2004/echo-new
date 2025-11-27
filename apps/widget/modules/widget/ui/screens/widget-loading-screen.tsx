@@ -2,7 +2,7 @@
 import { useState,useEffect } from "react";
 import { useSetAtom, useAtomValue } from "jotai";
 import {  LoaderIcon } from "lucide-react";
-import { contactSessionIdAtomFamily, errorMessageAtom, loadingMessageAtom, organizationIdAtom, screenAtom, vapiSecretsAtom, widgetSettingsAtom } from "@/modules/widget/atoms/widget-atoms";
+import { chatbotIdAtom, contactSessionIdAtomFamily, errorMessageAtom, loadingMessageAtom, organizationIdAtom, screenAtom, vapiSecretsAtom, widgetSettingsAtom } from "@/modules/widget/atoms/widget-atoms";
 import { WidgetHeader } from "@/modules/widget/ui/components/widget-header";
 import { api } from "@workspace/backend/_generated/api";
 import { useAction,useMutation, useQuery } from "convex/react";
@@ -12,10 +12,12 @@ import { useAction,useMutation, useQuery } from "convex/react";
 type InitStep = "org" | "session" | "settings" | "vapi" | "done";
 
 
-export const WidgetLoadingScreen = ({ organizationId }: { organizationId: string | null }
+export const WidgetLoadingScreen = ({ organizationId, chatbotId }: { organizationId: string | null, chatbotId?: string | null }
 ) => {
   const [step, setStep] = useState<InitStep>("org");
   const [sessionValid, setSessionValid] = useState(false);
+
+  console.log('[WidgetLoadingScreen] Received props:', { organizationId, chatbotId });
 
   const loadingMessage = useAtomValue(loadingMessageAtom);
   const setWidgetSettings = useSetAtom(widgetSettingsAtom);
@@ -23,6 +25,7 @@ export const WidgetLoadingScreen = ({ organizationId }: { organizationId: string
   const setScreen = useSetAtom(screenAtom);
   const setLoadingMessage = useSetAtom(loadingMessageAtom);
   const setOrganizationId = useSetAtom(organizationIdAtom);
+  const setChatbotId = useSetAtom(chatbotIdAtom);
 
   const validateOrganization = useAction(api.public.organizations.validate);
   const setVapiSecrets = useSetAtom(vapiSecretsAtom);
@@ -52,12 +55,18 @@ export const WidgetLoadingScreen = ({ organizationId }: { organizationId: string
       .then((result) => {
         if (result.valid) {
           setOrganizationId(organizationId);
+          if (chatbotId) {
+            console.log('[WidgetLoadingScreen] Setting chatbotId from URL:', chatbotId);
+            setChatbotId(chatbotId);
+          } else {
+            console.log('[WidgetLoadingScreen] No chatbotId from URL');
+          }
           setStep("session");
 
         }else{
           setErrorMessage(result.reason || "Invalid configuration");
           setScreen("error");
-          
+
         }
 
       })
@@ -119,21 +128,50 @@ export const WidgetLoadingScreen = ({ organizationId }: { organizationId: string
     //step 3
 
 
-    const widgetSettings = useQuery(api.public.widgetSettings.getByOrganizationId, 
-        organizationId ? {
-          organizationId,
-        } : "skip",
-      );
+    const widgetSettings = useQuery(
+      api.public.widgetSettings.getChatbotSettings,
+      organizationId
+        ? {
+            organizationId,
+            ...(chatbotId ? { chatbotId } : {}),
+          }
+        : "skip"
+    );
 
       useEffect(() => {
         if (step !== "settings") {
           return;
         }
 
-        setLoadingMessage("Loading widget settings...");
+        setLoadingMessage("Loading chatbot settings...");
 
         if (widgetSettings !== undefined) {
           setWidgetSettings(widgetSettings);
+
+          console.log('[WidgetLoadingScreen] Got widgetSettings, chatbotId in settings:', (widgetSettings as any)?.chatbotId);
+          console.log('[WidgetLoadingScreen] Current chatbotId from URL prop:', chatbotId);
+
+          // Store chatbotId if it exists in the settings (and wasn't already set from URL)
+          if ((widgetSettings as any)?.chatbotId && !chatbotId) {
+            console.log('[WidgetLoadingScreen] Overriding with settings chatbotId:', (widgetSettings as any).chatbotId);
+            setChatbotId((widgetSettings as any).chatbotId);
+          }
+
+          // Send appearance settings to parent window (embed script)
+          const appearance = widgetSettings?.appearance;
+          if (appearance?.primaryColor || appearance?.size) {
+            window.parent.postMessage(
+              {
+                type: 'updateAppearance',
+                payload: {
+                  primaryColor: appearance?.primaryColor,
+                  size: appearance?.size || 'medium',
+                },
+              },
+              '*'
+            );
+          }
+
           setStep("vapi");
         }
       }, [
@@ -142,7 +180,8 @@ export const WidgetLoadingScreen = ({ organizationId }: { organizationId: string
         setStep,
         setWidgetSettings,
         setLoadingMessage,
-
+        setChatbotId,
+        chatbotId,
       ]);
 
       //step4
