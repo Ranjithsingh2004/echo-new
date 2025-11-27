@@ -16,7 +16,13 @@ export default defineSchema({
 
         widgetSettings: defineTable({
         organizationId: v.string(),
+        chatbotName: v.optional(v.string()),
         greetMessage: v.string(),
+        customSystemPrompt: v.optional(v.string()),
+        appearance: v.optional(v.object({
+            primaryColor: v.optional(v.string()),
+            size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+        })),
         defaultSuggestions: v.object({
             suggestion1: v.optional(v.string()),
             suggestion2: v.optional(v.string()),
@@ -28,6 +34,47 @@ export default defineSchema({
         }),
         })
         .index("by_organization_id", ["organizationId"]),
+
+    knowledgeBases: defineTable({
+        organizationId: v.string(),
+        name: v.string(),
+        knowledgeBaseId: v.string(),
+        description: v.optional(v.string()),
+        ragNamespace: v.string(),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    })
+    .index("by_organization_id", ["organizationId"])
+    .index("by_knowledge_base_id", ["knowledgeBaseId"]),
+
+    chatbots: defineTable({
+        organizationId: v.string(),
+        name: v.string(),
+        chatbotId: v.string(),
+        knowledgeBaseId: v.id("knowledgeBases"),
+        appearance: v.optional(v.object({
+            primaryColor: v.optional(v.string()),
+            size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+        })),
+        greetMessage: v.string(),
+        customSystemPrompt: v.optional(v.string()),
+        defaultSuggestions: v.object({
+            suggestion1: v.optional(v.string()),
+            suggestion2: v.optional(v.string()),
+            suggestion3: v.optional(v.string()),
+        }),
+        vapiSettings: v.object({
+            assistantId: v.optional(v.string()),
+            phoneNumber: v.optional(v.string()),
+        }),
+        isDefault: v.boolean(),
+        isActive: v.optional(v.boolean()),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    })
+    .index("by_organization_id", ["organizationId"])
+    .index("by_chatbot_id", ["chatbotId"])
+    .index("by_knowledge_base_id", ["knowledgeBaseId"]),
 
     plugins: defineTable({
         organizationId: v.string(),
@@ -44,6 +91,7 @@ export default defineSchema({
     conversations: defineTable({
         threadId: v.string(),
         organizationId: v.string(),
+        chatbotId: v.optional(v.id("chatbots")),
         contactSessionId: v.id("contactSessions"),
         caseId: v.optional(v.string()),
         json: v.optional(v.string()),
@@ -57,7 +105,8 @@ export default defineSchema({
             .index("by_contact_session_id", ["contactSessionId"])
             .index("by_thread_id", ["threadId"])
             .index("by_status_and_organization_id", ["status", "organizationId"])
-            .index("by_case_id", ["caseId"]),
+            .index("by_case_id", ["caseId"])
+            .index("by_chatbot_id", ["chatbotId"]),
 
 
 

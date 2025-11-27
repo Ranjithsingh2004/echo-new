@@ -97,20 +97,21 @@ export const addFile = action({
     mimeType: v.string(),
     bytes: v.bytes(),
     category: v.optional(v.string()),
+    knowledgeBaseId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Handler body to be implemented
      const identity = await ctx.auth.getUserIdentity();
-    
+
         if (identity === null) {
           throw new ConvexError({
             code: "UNAUTHORIZED",
             message: "Identity not found",
           });
         }
-    
+
         const orgId = identity.orgId as string;
-    
+
         if (!orgId) {
           throw new ConvexError({
             code: "UNAUTHORIZED",
@@ -123,13 +124,41 @@ export const addFile = action({
                   organizationId: orgId,
                 },
               );
-        
+
               if (subscription?.status !== "active") {
               throw new ConvexError({
                 code: "BAD_REQUEST",
                 message: "Missing subscription"
               });
             }
+
+        // Determine which namespace to use
+        let namespace = orgId; // Default fallback to orgId for backward compatibility
+
+        if (args.knowledgeBaseId) {
+          // Get the knowledge base to use its RAG namespace
+          const knowledgeBase = await ctx.runQuery(
+            internal.system.knowledgeBases.getByKnowledgeBaseId,
+            { knowledgeBaseId: args.knowledgeBaseId }
+          );
+
+          if (!knowledgeBase) {
+            throw new ConvexError({
+              code: "NOT_FOUND",
+              message: "Knowledge base not found",
+            });
+          }
+
+          if (knowledgeBase.organizationId !== orgId) {
+            throw new ConvexError({
+              code: "UNAUTHORIZED",
+              message: "Knowledge base does not belong to your organization",
+            });
+          }
+
+          namespace = knowledgeBase.ragNamespace;
+        }
+
         const { bytes, filename, category} = args;
 
         const mimeType = args.mimeType || guessMimeType(filename, bytes);
@@ -146,9 +175,9 @@ export const addFile = action({
             });
 
             const {entryId,created} = await rag.add(ctx, {
-  // SUPER IMPORTANT: What search space to add t
+  // SUPER IMPORTANT: What search space to add to
   // If not added, it will be considered global
-  namespace: orgId,
+  namespace: namespace,
   text,
   key: filename,
   title: filename,
@@ -157,6 +186,7 @@ export const addFile = action({
     uploadedBy:orgId,
     filename,
     category:category ?? null,
+    knowledgeBaseId: args.knowledgeBaseId ?? null,
 
 
      } as EntryMetadata,
@@ -181,22 +211,23 @@ return {
 export const list = query({
   args: {
     category: v.optional(v.string()),
+    knowledgeBaseId: v.optional(v.string()),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
 
-    
+
     const identity = await ctx.auth.getUserIdentity();
-    
+
         if (identity === null) {
           throw new ConvexError({
             code: "UNAUTHORIZED",
             message: "Identity not found",
           });
         }
-    
+
         const orgId = identity.orgId as string;
-    
+
         if (!orgId) {
           throw new ConvexError({
             code: "UNAUTHORIZED",
@@ -204,54 +235,120 @@ export const list = query({
           });
         }
 
+        // If knowledgeBaseId is provided, query that specific namespace
+        if (args.knowledgeBaseId) {
+          const kbId = args.knowledgeBaseId;
+          const knowledgeBase = await ctx.db
+            .query("knowledgeBases")
+            .withIndex("by_knowledge_base_id", (q) => q.eq("knowledgeBaseId", kbId))
+            .unique();
 
-// Ensure namespace exists by attempting to get or create it
-try {
-  const namespace = await rag.getNamespace(ctx, {
-    namespace: orgId,
-  });
+          if (!knowledgeBase) {
+            return { page: [], isDone: true, continueCursor: "" };
+          }
 
-  if (!namespace) {
-    // Namespace doesn't exist yet, return empty results
-    return { page: [], isDone: true, continueCursor: "" };
-  }
+          if (knowledgeBase.organizationId !== orgId) {
+            throw new ConvexError({
+              code: "UNAUTHORIZED",
+              message: "Knowledge base does not belong to your organization",
+            });
+          }
 
-  const results = await rag.list(ctx, {
-    namespaceId: namespace.namespaceId,
-    paginationOpts: args.paginationOpts,
-  });
+          try {
+            const namespace = await rag.getNamespace(ctx, {
+              namespace: knowledgeBase.ragNamespace,
+            });
 
-  const files = await Promise.all(
-    results.page.map((entry) => convertEntryToPublicFile(ctx, entry))
-  );
+            if (!namespace) {
+              return { page: [], isDone: true, continueCursor: "" };
+            }
 
-  const filteredFiles = args.category
-    ? files.filter((file) => file.category === args.category)
-    : files;
+            const results = await rag.list(ctx, {
+              namespaceId: namespace.namespaceId,
+              paginationOpts: args.paginationOpts,
+            });
 
-  return {
-    page: filteredFiles,
-    isDone: results.isDone,
-    continueCursor: results.continueCursor,
-  };
-} catch (error) {
-  // If getNamespace fails (e.g., due to missing modelId), we need to ensure the namespace
-  // is properly initialized. We can do this by adding a dummy entry and removing it,
-  // or just return empty results if no namespace exists yet.
-  console.error("Error getting namespace:", error);
-  return { page: [], isDone: true, continueCursor: "" };
-}
+            const files = await Promise.all(
+              results.page.map((entry) => convertEntryToPublicFile(ctx, entry))
+            );
+
+            return {
+              page: files,
+              isDone: results.isDone,
+              continueCursor: results.continueCursor,
+            };
+          } catch (error) {
+            console.error("Error getting namespace:", error);
+            return { page: [], isDone: true, continueCursor: "" };
+          }
+        }
+
+        // No knowledgeBaseId: query ALL knowledge bases for this organization
+        const allKnowledgeBases = await ctx.db
+          .query("knowledgeBases")
+          .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+          .collect();
+
+        let allFiles: Awaited<ReturnType<typeof convertEntryToPublicFile>>[] = [];
+
+        // Query each knowledge base namespace
+        for (const kb of allKnowledgeBases) {
+          try {
+            const namespace = await rag.getNamespace(ctx, {
+              namespace: kb.ragNamespace,
+            });
+
+            if (!namespace) continue;
+
+            const results = await rag.list(ctx, {
+              namespaceId: namespace.namespaceId,
+              paginationOpts: { numItems: 100, cursor: null }, // Get more items for aggregation
+            });
+
+            const files = await Promise.all(
+              results.page.map((entry) => convertEntryToPublicFile(ctx, entry))
+            );
+
+            allFiles = allFiles.concat(files);
+          } catch (error) {
+            console.error(`Error querying KB ${kb.name}:`, error);
+            continue;
+          }
+        }
+
+        // Sort by most recent first
+        allFiles.sort((a, b) => {
+          // Assuming files don't have creation time, we'll keep original order
+          return 0;
+        });
+
+        // Apply category filter if specified
+        if (args.category) {
+          allFiles = allFiles.filter((file) => file.category === args.category);
+        }
+
+        // Simple pagination - take first N items
+        const pageSize = args.paginationOpts.numItems;
+        const paginatedFiles = allFiles.slice(0, pageSize);
+
+        return {
+          page: paginatedFiles,
+          isDone: paginatedFiles.length < pageSize,
+          continueCursor: "",
+        };
   },
 });
 
 export type PublicFile = {
   id: EntryId,
   name: string,
+  originalFilename?: string,
   type: string,
   size: string,
   status: "ready" | "processing" | "error",
   url: string | null,
   category?: string,
+  knowledgeBaseId?: string | null,
 };
 
 type EntryMetadata = {
@@ -259,6 +356,7 @@ type EntryMetadata = {
   uploadedBy: string;
   filename: string;
   category: string | null;
+  knowledgeBaseId: string | null;
 };
 
 
@@ -298,11 +396,13 @@ const url = storageId ? await ctx.storage.getUrl(storageId) : null;
 return {
   id: entry.entryId,
   name: filename,
+  originalFilename: metadata?.filename || undefined,
   type: extension,
   size: fileSize,
   status,
   url,
   category: metadata?.category || undefined,
+  knowledgeBaseId: metadata?.knowledgeBaseId || undefined,
 }
 
 

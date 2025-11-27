@@ -4,7 +4,7 @@ import { WidgetHeader } from "@/modules/widget/ui/components/widget-header";
 import { Button} from "@workspace/ui/components/button";
 import { ChevronRightIcon, MessageSquareTextIcon, MicIcon, PhoneIcon } from "lucide-react";
 import { useSetAtom, useAtomValue } from "jotai";
-import {contactSessionIdAtomFamily,organizationIdAtom,screenAtom,errorMessageAtom,conversationIdAtom, widgetSettingsAtom, hasVapiSecretsAtom} from"../../atoms/widget-atoms";
+import {chatbotIdAtom,contactSessionIdAtomFamily,organizationIdAtom,screenAtom,errorMessageAtom,conversationIdAtom, widgetSettingsAtom, hasVapiSecretsAtom} from"../../atoms/widget-atoms";
 import {useMutation} from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { useState } from "react";
@@ -23,6 +23,7 @@ export const WidgetSelectionScreen = () => {
 
   const setConversationId = useSetAtom(conversationIdAtom);
   const organizationId = useAtomValue(organizationIdAtom);
+  const chatbotId = useAtomValue(chatbotIdAtom);
   const contactSessionId = useAtomValue(
     contactSessionIdAtomFamily(organizationId || "")
   );
@@ -52,6 +53,7 @@ export const WidgetSelectionScreen = () => {
       const conversationId = await createConversation({
         contactSessionId,
         organizationId,
+        chatbotId: chatbotId || undefined,
       });
       setConversationId(conversationId);
 
@@ -61,7 +63,7 @@ export const WidgetSelectionScreen = () => {
     } finally {
       setIsPending(false);
     }
-   
+
 };
 
 

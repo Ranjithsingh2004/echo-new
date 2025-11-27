@@ -13,10 +13,13 @@ import type * as http from "../http.js";
 import type * as lib_extractTextContent from "../lib/extractTextContent.js";
 import type * as lib_generateCaseId from "../lib/generateCaseId.js";
 import type * as lib_secrets from "../lib/secrets.js";
+import type * as migrations_addIsActiveField from "../migrations/addIsActiveField.js";
+import type * as private_chatbots from "../private/chatbots.js";
 import type * as private_contactSessions from "../private/contactSessions.js";
 import type * as private_conversationExports from "../private/conversationExports.js";
 import type * as private_conversations from "../private/conversations.js";
 import type * as private_files from "../private/files.js";
+import type * as private_knowledgeBases from "../private/knowledgeBases.js";
 import type * as private_messages from "../private/messages.js";
 import type * as private_plugins from "../private/plugins.js";
 import type * as private_secrets from "../private/secrets.js";
@@ -34,11 +37,14 @@ import type * as system_ai_rag from "../system/ai/rag.js";
 import type * as system_ai_tools_escalateConversation from "../system/ai/tools/escalateConversation.js";
 import type * as system_ai_tools_resolveConversation from "../system/ai/tools/resolveConversation.js";
 import type * as system_ai_tools_search from "../system/ai/tools/search.js";
+import type * as system_chatbots from "../system/chatbots.js";
 import type * as system_contactSessions from "../system/contactSessions.js";
 import type * as system_conversations from "../system/conversations.js";
+import type * as system_knowledgeBases from "../system/knowledgeBases.js";
 import type * as system_plugins from "../system/plugins.js";
 import type * as system_secrets from "../system/secrets.js";
 import type * as system_subscriptions from "../system/subscriptions.js";
+import type * as system_widgetSettings from "../system/widgetSettings.js";
 import type * as users from "../users.js";
 
 import type {
@@ -53,10 +59,13 @@ declare const fullApi: ApiFromModules<{
   "lib/extractTextContent": typeof lib_extractTextContent;
   "lib/generateCaseId": typeof lib_generateCaseId;
   "lib/secrets": typeof lib_secrets;
+  "migrations/addIsActiveField": typeof migrations_addIsActiveField;
+  "private/chatbots": typeof private_chatbots;
   "private/contactSessions": typeof private_contactSessions;
   "private/conversationExports": typeof private_conversationExports;
   "private/conversations": typeof private_conversations;
   "private/files": typeof private_files;
+  "private/knowledgeBases": typeof private_knowledgeBases;
   "private/messages": typeof private_messages;
   "private/plugins": typeof private_plugins;
   "private/secrets": typeof private_secrets;
@@ -74,11 +83,14 @@ declare const fullApi: ApiFromModules<{
   "system/ai/tools/escalateConversation": typeof system_ai_tools_escalateConversation;
   "system/ai/tools/resolveConversation": typeof system_ai_tools_resolveConversation;
   "system/ai/tools/search": typeof system_ai_tools_search;
+  "system/chatbots": typeof system_chatbots;
   "system/contactSessions": typeof system_contactSessions;
   "system/conversations": typeof system_conversations;
+  "system/knowledgeBases": typeof system_knowledgeBases;
   "system/plugins": typeof system_plugins;
   "system/secrets": typeof system_secrets;
   "system/subscriptions": typeof system_subscriptions;
+  "system/widgetSettings": typeof system_widgetSettings;
   users: typeof users;
 }>;
 

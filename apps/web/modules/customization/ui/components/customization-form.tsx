@@ -28,70 +28,101 @@ import { api } from "@workspace/backend/_generated/api";
 import { VapiFormFields } from "./vapi-form-fields";
 import { FormSchema } from "../../types";
 import { widgetSettingsSchema } from "../../schemas";
+import { useEffect } from "react";
 
-
-
-
-
-type WidgetSettings = Doc<"widgetSettings">;
+type Chatbot = Doc<"chatbots">;
 
 interface CustomizationFormProps {
-  initialData?: WidgetSettings | null;
+  chatbot: Chatbot;
   hasVapiPlugin?: boolean;
 }
 
 export const CustomizationForm = ({
-  initialData,
+  chatbot,
   hasVapiPlugin,
 }: CustomizationFormProps) => {
-  const upsertWidgetSettings = useMutation(api.private.widgetSettings.upsert);
+  const updateChatbot = useMutation(api.private.chatbots.update);
 
   const form = useForm<FormSchema>({
     resolver: zodResolver(widgetSettingsSchema),
     defaultValues: {
-      greetMessage: initialData?.greetMessage || "Hi!How can I help you?",
-      defaultSuggestions: {   
-        suggestion1: initialData?.defaultSuggestions.suggestion1 || "",
-        suggestion2: initialData?.defaultSuggestions.suggestion2 || "",
-        suggestion3: initialData?.defaultSuggestions.suggestion3 || "",
+      chatbotName: chatbot.name || "Support Assistant",
+      greetMessage: chatbot.greetMessage || "Hi! How can I help you?",
+      customSystemPrompt: chatbot.customSystemPrompt || "",
+      appearance: {
+        primaryColor: chatbot.appearance?.primaryColor || "",
+        size: chatbot.appearance?.size || "medium",
+      },
+      defaultSuggestions: {
+        suggestion1: chatbot.defaultSuggestions.suggestion1 || "",
+        suggestion2: chatbot.defaultSuggestions.suggestion2 || "",
+        suggestion3: chatbot.defaultSuggestions.suggestion3 || "",
       },
       vapiSettings: {
-        assistantId: initialData?.vapiSettings.assistantId || "",
-        phoneNumber: initialData?.vapiSettings.phoneNumber || "",
+        assistantId: chatbot.vapiSettings.assistantId || "",
+        phoneNumber: chatbot.vapiSettings.phoneNumber || "",
       },
     },
-  }); 
+  });
+
+  // Reset form when chatbot changes
+  useEffect(() => {
+    form.reset({
+      chatbotName: chatbot.name || "Support Assistant",
+      greetMessage: chatbot.greetMessage || "Hi! How can I help you?",
+      customSystemPrompt: chatbot.customSystemPrompt || "",
+      appearance: {
+        primaryColor: chatbot.appearance?.primaryColor || "",
+        size: chatbot.appearance?.size || "medium",
+      },
+      defaultSuggestions: {
+        suggestion1: chatbot.defaultSuggestions.suggestion1 || "",
+        suggestion2: chatbot.defaultSuggestions.suggestion2 || "",
+        suggestion3: chatbot.defaultSuggestions.suggestion3 || "",
+      },
+      vapiSettings: {
+        assistantId: chatbot.vapiSettings.assistantId || "",
+        phoneNumber: chatbot.vapiSettings.phoneNumber || "",
+      },
+    });
+  }, [chatbot._id, chatbot.name, chatbot.greetMessage, chatbot.customSystemPrompt, chatbot.appearance?.primaryColor, chatbot.appearance?.size, chatbot.defaultSuggestions.suggestion1, chatbot.defaultSuggestions.suggestion2, chatbot.defaultSuggestions.suggestion3, chatbot.vapiSettings.assistantId, chatbot.vapiSettings.phoneNumber, form]);
 
   const onSubmit = async (values: FormSchema) => {
-  try {
-    const vapiSettings: WidgetSettings["vapiSettings"] = {
-  assistantId:
-    values.vapiSettings.assistantId === "none"
-      ? ''
-      : values.vapiSettings.assistantId,
-  phoneNumber:
-    values.vapiSettings.phoneNumber === "none"
-      ? ''
-      : values.vapiSettings.phoneNumber,
-};
+    try {
+      await updateChatbot({
+        chatbotId: chatbot.chatbotId,
+        name: values.chatbotName || chatbot.name,
+        knowledgeBaseId: chatbot.knowledgeBaseId,
+        greetMessage: values.greetMessage,
+        customSystemPrompt: values.customSystemPrompt || undefined,
+        appearance: {
+          primaryColor: values.appearance?.primaryColor || undefined,
+          size: values.appearance?.size || undefined,
+        },
+        defaultSuggestions: {
+          suggestion1: values.defaultSuggestions.suggestion1 || undefined,
+          suggestion2: values.defaultSuggestions.suggestion2 || undefined,
+          suggestion3: values.defaultSuggestions.suggestion3 || undefined,
+        },
+        vapiSettings: {
+          assistantId:
+            values.vapiSettings.assistantId === "none"
+              ? undefined
+              : values.vapiSettings.assistantId || undefined,
+          phoneNumber:
+            values.vapiSettings.phoneNumber === "none"
+              ? undefined
+              : values.vapiSettings.phoneNumber || undefined,
+        },
+        isDefault: chatbot.isDefault,
+      });
 
-await upsertWidgetSettings({
-  greetMessage: values.greetMessage,
-  defaultSuggestions: values.defaultSuggestions,
-  vapiSettings,
-});
-
-toast.success("Widget settings saved");
-
-
-
-
-    
-  } catch (error) {
-    console.error(error);
-    toast.error("Something went wrong");
-  }
-};
+      toast.success("Chatbot settings saved");
+    } catch (error) {
+      console.error(error);
+      toast.error("Something went wrong");
+    }
+  };
 
 return (
   <Form {...form}>
@@ -106,6 +137,26 @@ return (
         <CardContent className="space-y-6">
           <FormField
             control={form.control}
+            name="chatbotName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Chatbot Name</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="e.g., Support Assistant, AI Helper"
+                  />
+                </FormControl>
+                <FormDescription>
+                  The name displayed for your AI assistant in the chat widget
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Separator />
+          <FormField
+            control={form.control}
             name="greetMessage"
             render={({ field }) => (
               <FormItem>
@@ -113,8 +164,8 @@ return (
                 <FormControl>
                   <Textarea
                     {...field}
-                    placeholder="Welcome message shown when chat op"
-                    rows = {3}
+                    placeholder="Welcome message shown when chat opens"
+                    rows={3}
                   />
                 </FormControl>
                 <FormDescription>
@@ -125,9 +176,94 @@ return (
             )}
           />
           <Separator />
+          <FormField
+            control={form.control}
+            name="customSystemPrompt"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Custom System Prompt (Advanced)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="Leave empty to use default AI behavior. Enter custom instructions to modify how the AI assistant responds..."
+                    rows={8}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Advanced: Customize the AI&apos;s behavior and personality. Leave empty to use the default prompt optimized for customer support.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Separator />
           <div className="space-y-4">
             <div>
-              <h3 className="mb-4 text-sm">
+              <h3 className="mb-4 text-sm font-medium">
+                Appearance
+              </h3>
+              <p className="mb-4 text-muted-foreground text-sm">
+                Customize the look and feel of your chat widget
+              </p>
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="appearance.primaryColor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Primary Color</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-x-2">
+                          <Input
+                            {...field}
+                            placeholder="#3B82F6"
+                            type="text"
+                          />
+                          <Input
+                            className="h-10 w-20 cursor-pointer"
+                            onChange={(e) => field.onChange(e.target.value)}
+                            type="color"
+                            value={field.value || "#3B82F6"}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Main color for buttons and highlights. Leave empty for default blue (#3B82F6)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="appearance.size"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Widget Size</FormLabel>
+                      <FormControl>
+                        <select
+                          {...field}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <option value="medium">Default (Medium)</option>
+                          <option value="small">Small</option>
+                          <option value="large">Large</option>
+                        </select>
+                      </FormControl>
+                      <FormDescription>
+                        Size of the chat widget window
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+          </div>
+          <Separator />
+          <div className="space-y-4">
+            <div>
+              <h3 className="mb-4 text-sm font-medium">
                 Default Suggestions
               </h3>
               <p className="mb-4 text-muted-foreground text-sm">
@@ -144,10 +280,10 @@ return (
                         <Input
                           {...field}
                           placeholder="e.g. How do I get started?"
-                          
+
                         />
                       </FormControl>
-                      
+
                       <FormMessage />
                     </FormItem>
                   )}
@@ -164,7 +300,7 @@ return (
                           placeholder="e.g. What are your pricing plans?"
                         />
                       </FormControl>
-                      
+
                       <FormMessage />
                     </FormItem>
                   )}
@@ -181,7 +317,7 @@ return (
                           placeholder="e.g. Can I speak to support?"
                         />
                       </FormControl>
-                      
+
                       <FormMessage />
                     </FormItem>
                   )}
@@ -207,7 +343,6 @@ return (
           </CardContent>
 
 
-           
         </Card>
       )}
 
@@ -217,17 +352,7 @@ return (
         </Button>
       </div>
 
-
-
-
-
     </form>
   </Form>
 );
-
-
-
-      
 }
-   
-

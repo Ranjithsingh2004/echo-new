@@ -6,26 +6,32 @@ import { chatBubbleIcon, closeIcon } from './icons';
   let container: HTMLDivElement | null = null;
   let button: HTMLButtonElement | null = null;
   let isOpen = false;
-  
+
   // Get configuration from script tag
   let organizationId: string | null = null;
+  let chatbotId: string | null = null;
   let position: 'bottom-right' | 'bottom-left' = EMBED_CONFIG.DEFAULT_POSITION;
-  
+  let customPrimaryColor: string = '#3b82f6'; // Store custom color
+
   // Try to get the current script
   const currentScript = document.currentScript as HTMLScriptElement;
   if (currentScript) {
     organizationId = currentScript.getAttribute('data-organization-id');
+    chatbotId = currentScript.getAttribute('data-chatbot-id');
     position = (currentScript.getAttribute('data-position') as 'bottom-right' | 'bottom-left') || EMBED_CONFIG.DEFAULT_POSITION;
+    console.log('[Embed] Got attributes from currentScript:', { organizationId, chatbotId, position });
   } else {
     // Fallback: find script tag by src
     const scripts = document.querySelectorAll('script[src*="embed"]');
-    const embedScript = Array.from(scripts).find(script => 
+    const embedScript = Array.from(scripts).find(script =>
       script.hasAttribute('data-organization-id')
     ) as HTMLScriptElement;
-    
+
     if (embedScript) {
       organizationId = embedScript.getAttribute('data-organization-id');
+      chatbotId = embedScript.getAttribute('data-chatbot-id');
       position = (embedScript.getAttribute('data-position') as 'bottom-right' | 'bottom-left') || EMBED_CONFIG.DEFAULT_POSITION;
+      console.log('[Embed] Got attributes from fallback script:', { organizationId, chatbotId, position });
     }
   }
   
@@ -119,14 +125,19 @@ import { chatBubbleIcon, closeIcon } from './icons';
   function buildWidgetUrl(): string {
     const params = new URLSearchParams();
     params.append('organizationId', organizationId!);
-    return `${EMBED_CONFIG.WIDGET_URL}?${params.toString()}`;
+    if (chatbotId) {
+      params.append('chatbotId', chatbotId);
+    }
+    const url = `${EMBED_CONFIG.WIDGET_URL}?${params.toString()}`;
+    console.log('[Embed] Building widget URL:', url);
+    return url;
   }
   
   function handleMessage(event: MessageEvent) {
     if (event.origin !== new URL(EMBED_CONFIG.WIDGET_URL).origin) return;
-    
+
     const { type, payload } = event.data;
-    
+
     switch (type) {
       case 'close':
         hide();
@@ -134,6 +145,27 @@ import { chatBubbleIcon, closeIcon } from './icons';
       case 'resize':
         if (payload.height && container) {
           container.style.height = `${payload.height}px`;
+        }
+        if (payload.width && container) {
+          container.style.width = `${payload.width}px`;
+        }
+        break;
+      case 'updateAppearance':
+        // Update button color if primary color is provided
+        if (payload.primaryColor && button) {
+          customPrimaryColor = payload.primaryColor; // Store the custom color
+          button.style.background = payload.primaryColor;
+        }
+        // Update container size if size is provided
+        if (payload.size && container) {
+          const sizes = {
+            small: { width: '320px', height: '500px' },
+            medium: { width: '380px', height: '600px' },
+            large: { width: '450px', height: '700px' },
+          };
+          const selectedSize = sizes[payload.size as keyof typeof sizes] || sizes.medium;
+          container.style.width = selectedSize.width;
+          container.style.height = selectedSize.height;
         }
         break;
     }
@@ -174,7 +206,7 @@ import { chatBubbleIcon, closeIcon } from './icons';
       }, 300);
       // Change button icon back to chat
       button.innerHTML = chatBubbleIcon;
-      button.style.background = '#3b82f6';
+      button.style.background = customPrimaryColor; // Use stored custom color
     }
   }
   

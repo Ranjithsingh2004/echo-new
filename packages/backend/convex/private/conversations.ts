@@ -134,6 +134,7 @@ export const getMany = query({
         v.literal("resolved")
       )
     ),
+    chatbotId: v.optional(v.id("chatbots")),
 
   },
   handler: async (ctx, args) => {
@@ -156,7 +157,26 @@ export const getMany = query({
       });
     }
     let conversations: PaginationResult<Doc<"conversations">>;
-    if (args.status) {
+
+    // Build query based on filters
+    if (args.chatbotId) {
+      // Filter by chatbot
+      conversations = await ctx.db
+        .query("conversations")
+        .withIndex("by_chatbot_id", (q) => q.eq("chatbotId", args.chatbotId))
+        .filter((q) => q.eq(q.field("organizationId"), orgId))
+        .order("desc")
+        .paginate(args.paginationOpts);
+
+      // Apply status filter if provided
+      if (args.status) {
+        const statusFiltered = conversations.page.filter(
+          (conv) => conv.status === args.status
+        );
+        conversations = { ...conversations, page: statusFiltered };
+      }
+    } else if (args.status) {
+      // Filter by status only
       conversations = await ctx.db
         .query("conversations")
         .withIndex("by_status_and_organization_id", (q) =>
@@ -170,13 +190,14 @@ export const getMany = query({
             .order("desc")
             .paginate(args.paginationOpts)
 
-          }else {
-              conversations = await ctx.db
-                .query("conversations")
-                .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
-                .order("desc")
-                .paginate(args.paginationOpts)
-            }
+    } else {
+      // No filters
+      conversations = await ctx.db
+        .query("conversations")
+        .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+        .order("desc")
+        .paginate(args.paginationOpts)
+    }
 
             const conversationsWithAdditionalData = await Promise.all(
             conversations.page.map(async (conversation) => {
@@ -187,6 +208,16 @@ export const getMany = query({
               if (!contactSession) {
                 return null;
               }
+
+              // Get chatbot name if conversation has a chatbot
+              let chatbotName: string | null = null;
+              if (conversation.chatbotId) {
+                const chatbot = await ctx.db.get(conversation.chatbotId);
+                if (chatbot) {
+                  chatbotName = chatbot.name;
+                }
+              }
+
               const messages = await supportAgent.listMessages(ctx, {
               threadId: conversation.threadId,
               paginationOpts: { numItems: 1, cursor: null },
@@ -200,6 +231,7 @@ export const getMany = query({
               ...conversation,
               lastMessage,
               contactSession,
+              chatbotName,
             };
           })
         );

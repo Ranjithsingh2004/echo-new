@@ -20,10 +20,11 @@ import { DicebearAvatar } from "@workspace/ui/components/dicebear-avatar";
 import {ConversationStatusIcon} from "@workspace/ui/components/conversation-status-icon";
 import { getCountryFlagUrl } from "@/lib/country-utils";
 import { useAtomValue,useSetAtom } from "jotai/react";
-import { statusFilterAtom } from "../../atoms";
+import { statusFilterAtom, chatbotFilterAtom } from "../../atoms";
 import {useInfiniteScroll} from "@workspace/ui/hooks/use-infinite-scroll"
 import {InfiniteScrollTrigger} from "@workspace/ui/components/infinite-scroll-trigger"
 import { Skeleton } from "@workspace/ui/components/skeleton";
+import { useQuery } from "convex/react";
 
 
 
@@ -33,14 +34,22 @@ export const ConversationsPanel = () => {
 
     const statusFilter = useAtomValue(statusFilterAtom);
     const setStatusFilter = useSetAtom(statusFilterAtom);
+    const chatbotFilter = useAtomValue(chatbotFilterAtom);
+    const setChatbotFilter = useSetAtom(chatbotFilterAtom);
+
+    const chatbots = useQuery(api.private.chatbots.list);
 
     const conversations = usePaginatedQuery(
         api.private.conversations.getMany,
         {
-           status: 
+           status:
                 statusFilter === "all"
                     ? undefined
                     : statusFilter,
+           chatbotId:
+                chatbotFilter === "all"
+                    ? undefined
+                    : chatbotFilter,
 
         },
         {
@@ -68,7 +77,7 @@ export const ConversationsPanel = () => {
 
   return (
     <div className="flex h-full w-full flex-col bg-background text-sidebar-foreground">
-      <div className="flex flex-col gap-3.5 border-b p-2">
+      <div className="flex flex-col gap-2 border-b p-2">
         <Select
             defaultValue="all"
             onValueChange={(value) => setStatusFilter(
@@ -79,7 +88,7 @@ export const ConversationsPanel = () => {
             <SelectTrigger
             className="h-8 border-none px-1.5 shadow-none ring-0 hover:bg-accent hover:text-accent-foreground focus-visible:ring-0"
             >
-                <SelectValue placeholder="Filter" />
+                <SelectValue placeholder="Filter by Status" />
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value="all">
@@ -108,6 +117,32 @@ export const ConversationsPanel = () => {
                     </SelectItem>
 
 
+            </SelectContent>
+
+        </Select>
+
+        <Select
+            defaultValue="all"
+            onValueChange={(value) => setChatbotFilter(value as any)}
+            value={chatbotFilter}
+            >
+            <SelectTrigger
+            className="h-8 border-none px-1.5 shadow-none ring-0 hover:bg-accent hover:text-accent-foreground focus-visible:ring-0"
+            >
+                <SelectValue placeholder="Filter by Chatbot" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                    <ListIcon className="size-4" />
+                    <span>All Chatbots</span>
+                    </div>
+                </SelectItem>
+                {chatbots && chatbots.map((chatbot) => (
+                    <SelectItem key={chatbot._id} value={chatbot._id}>
+                        {chatbot.name}
+                    </SelectItem>
+                ))}
             </SelectContent>
 
         </Select>
@@ -165,9 +200,17 @@ export const ConversationsPanel = () => {
                             </span>
 
                         </div>
-                        {conversation.caseId && (
-                          <div className="text-muted-foreground text-xs mt-0.5">
-                            Case ID: {conversation.caseId}
+                        {(conversation.caseId || conversation.chatbotName) && (
+                          <div className="text-muted-foreground text-xs mt-0.5 flex items-center gap-2">
+                            {conversation.caseId && (
+                              <span>Case ID: {conversation.caseId}</span>
+                            )}
+                            {conversation.caseId && conversation.chatbotName && (
+                              <span>•</span>
+                            )}
+                            {conversation.chatbotName && (
+                              <span>{conversation.chatbotName}</span>
+                            )}
                           </div>
                         )}
 

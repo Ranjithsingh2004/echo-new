@@ -8,6 +8,7 @@ import { resolveConversation } from "../system/ai/tools/resolveConversation";
 import { escalateConversation } from "../system/ai/tools/escalateConversation";
 import { saveMessage } from "@convex-dev/agent";
 import { search } from "../system/ai/tools/search";
+import { SUPPORT_AGENT_PROMPT } from "../system/ai/constants";
 
 
 export const create = action({
@@ -67,30 +68,75 @@ export const create = action({
     },
   );
 
+    // Fetch chatbot settings or fallback to widget settings
+    let customPrompt = null;
 
-
-
-
-
+    if (conversation.chatbotId) {
+      const chatbot = await ctx.runQuery(
+        internal.system.chatbots.getById,
+        {
+          id: conversation.chatbotId,
+        }
+      );
+      customPrompt = chatbot?.customSystemPrompt;
+    } else {
+      // Fallback to widget settings for backward compatibility
+      const widgetSettings = await ctx.runQuery(
+        internal.system.widgetSettings.getByOrganizationId,
+        {
+          organizationId: conversation.organizationId,
+        }
+      );
+      customPrompt = widgetSettings?.customSystemPrompt;
+    }
 
 
 
     const shouldTriggerAgent = conversation.status === "unresolved" && subscription?.status === "active";
 
     if(shouldTriggerAgent){
+          // Use custom system prompt if available
+          if (customPrompt) {
+            // Create a temporary agent with custom instructions
+            const { Agent } = await import("@convex-dev/agent");
+            const { openai } = await import("@ai-sdk/openai");
 
-          await supportAgent.generateText(
-          ctx,
-          { threadId: args.threadId },
+            const customAgent = new Agent(components.agent, {
+              chat: openai.chat('gpt-4o-mini'),
+              instructions: customPrompt,
+              tools: {
+                resolveConversation,
+                escalateConversation,
+              }
+            });
+
+            await customAgent.generateText(
+              ctx,
+              { threadId: args.threadId },
               {
-                  prompt: args.prompt,
-                  tools:{
-                    resolveConversation: resolveConversation,
-                    escalateConversation: escalateConversation,
-                    search : search,
-                  }
-              },
-          )
+                prompt: args.prompt,
+                tools: {
+                  resolveConversation,
+                  escalateConversation,
+                  search,
+                }
+              }
+            );
+          } else {
+            // Use default agent
+            await supportAgent.generateText(
+              ctx,
+              { threadId: args.threadId },
+              {
+                prompt: args.prompt,
+                tools: {
+                  resolveConversation,
+                  escalateConversation,
+                  search,
+                }
+              }
+            );
+          }
         }else{
           await saveMessage(ctx,components.agent,{
             threadId: args.threadId,
