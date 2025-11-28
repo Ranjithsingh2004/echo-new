@@ -63,8 +63,11 @@ if (conversation.chatbotId) {
 const searchResult = await rag.search(ctx, {
   namespace: namespace,
   query: args.query,
-  limit: 5,
+  limit: 50, // Increased to 50 for better coverage of large chunked files (15-20MB PDFs)
 });
+
+console.log(`[search] Found ${searchResult.entries.length} results for query: "${args.query}"`);
+console.log(`[search] Result titles:`, searchResult.entries.map(e => e.title).join(", "));
 
 const contextText = `Found results in ${searchResult.entries
   .map((e) => e.title || null)

@@ -1,12 +1,9 @@
-import { atomWithStorage } from "jotai/utils";
+import { atom } from "jotai";
 import { Doc, Id } from "@workspace/backend/_generated/dataModel";
-import { STATUS_FILTER_KEY, CHATBOT_FILTER_KEY } from "./constants";
 
-export const statusFilterAtom = atomWithStorage<
-  Doc<"conversations">["status"] | "all"
->(STATUS_FILTER_KEY, "all");
+export const statusFilterAtom = atom<Doc<"conversations">["status"] | "all">(
+  "all",
+);
 
-export const chatbotFilterAtom = atomWithStorage<
-  Id<"chatbots"> | "all"
->(CHATBOT_FILTER_KEY, "all");
+export const chatbotFilterAtom = atom<Id<"chatbots"> | "all">("all");
  

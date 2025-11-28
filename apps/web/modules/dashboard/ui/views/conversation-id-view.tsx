@@ -33,7 +33,7 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {toUIMessages,useThreadMessages} from "@convex-dev/agent/react";
 import { DicebearAvatar } from "@workspace/ui/components/dicebear-avatar";
 import { ConversationStatusButton } from "../components/conversation-status-button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@workspace/ui/lib/utils";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 import { toast } from "sonner";
@@ -45,7 +45,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@workspace/ui/components/dialog";
-import { ScrollArea } from "@workspace/ui/components/scroll-area";
+import { useOrganization } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 
 
@@ -60,13 +61,65 @@ export const ConversationIdView = ({
 }: {
   conversationId: Id<"conversations">,
 }) => {
-  const conversation = useQuery(api.private.conversations.getOne, {
-    conversationId,
-  });
+  const router = useRouter();
+  const { organization } = useOrganization();
+  const organizationId = organization?.id ?? null;
+  const [initialOrgId, setInitialOrgId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!organizationId || initialOrgId) {
+      return;
+    }
+
+    setInitialOrgId(organizationId);
+  }, [organizationId, initialOrgId]);
+
+  const hasOrgChanged = Boolean(
+    initialOrgId &&
+      organizationId &&
+      initialOrgId !== organizationId,
+  );
+
+  useEffect(() => {
+    if (!hasOrgChanged) {
+      return;
+    }
+
+    router.replace("/conversations");
+  }, [hasOrgChanged, router]);
+
+  const shouldSkipConversationQuery = !organizationId || hasOrgChanged;
+
+  const conversation = useQuery(
+    api.private.conversations.getOne,
+    shouldSkipConversationQuery
+      ? "skip"
+      : {
+          conversationId,
+        },
+  );
+
+  useEffect(() => {
+    if (conversation === null) {
+      router.replace("/conversations");
+    }
+  }, [conversation, router]);
+
+  useEffect(() => {
+    if (!conversation || !organizationId) {
+      return;
+    }
+
+    if (conversation.organizationId !== organizationId) {
+      router.replace("/conversations");
+    }
+  }, [conversation, organizationId, router]);
   const messages = useThreadMessages(
     api.private.messages.getMany,
-    conversation?.threadId ? { threadId: conversation.threadId } : "skip",
-    { initialNumItems: 10, }
+    shouldSkipConversationQuery || !conversation?.threadId
+      ? "skip"
+      : { threadId: conversation.threadId },
+    { initialNumItems: 10 }
   );
 
   const {
@@ -331,7 +384,9 @@ const handleEnhanceResponse = async () => {
                 // In reverse, because we are watching from "assistant" perspective
                 from={message.role === "user" ? "assistant" : "user"}
               >
-                <AIMessageContent>
+                <AIMessageContent
+                  className="group-[.is-user]:border-border group-[.is-user]:bg-background group-[.is-user]:text-foreground group-[.is-user]:bg-none group-[.is-user]:from-transparent group-[.is-user]:to-transparent"
+                >
                   <AIResponse>
                     {message.content}
                   </AIResponse>

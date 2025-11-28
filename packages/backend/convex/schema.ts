@@ -1,5 +1,39 @@
 import {defineSchema,defineTable} from "convex/server"; 
 import { v } from "convex/values";
+
+export const logoSchema = v.object({
+        type: v.union(v.literal("default"), v.literal("upload"), v.literal("url")),
+        storageId: v.optional(v.id("_storage")),
+        externalUrl: v.optional(v.string()),
+        fileName: v.optional(v.string()),
+        mimeType: v.optional(v.string()),
+        size: v.optional(v.number()),
+        updatedAt: v.number(),
+    });
+
+export const logoInputSchema = v.object({
+        type: v.union(v.literal("default"), v.literal("upload"), v.literal("url")),
+        storageId: v.optional(v.id("_storage")),
+        externalUrl: v.optional(v.string()),
+        fileName: v.optional(v.string()),
+        mimeType: v.optional(v.string()),
+        size: v.optional(v.number()),
+        updatedAt: v.number(),
+        url: v.optional(v.string()),
+    });
+
+export const appearanceSchema = v.object({
+        primaryColor: v.optional(v.string()),
+        size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+        logo: v.optional(logoSchema),
+    });
+
+export const appearanceInputSchema = v.object({
+        primaryColor: v.optional(v.string()),
+        size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
+        logo: v.optional(logoInputSchema),
+    });
+
 export default defineSchema({
 
     subscriptions: defineTable({
@@ -19,10 +53,7 @@ export default defineSchema({
         chatbotName: v.optional(v.string()),
         greetMessage: v.string(),
         customSystemPrompt: v.optional(v.string()),
-        appearance: v.optional(v.object({
-            primaryColor: v.optional(v.string()),
-            size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
-        })),
+        appearance: v.optional(appearanceSchema),
         defaultSuggestions: v.object({
             suggestion1: v.optional(v.string()),
             suggestion2: v.optional(v.string()),
@@ -52,10 +83,7 @@ export default defineSchema({
         name: v.string(),
         chatbotId: v.string(),
         knowledgeBaseId: v.id("knowledgeBases"),
-        appearance: v.optional(v.object({
-            primaryColor: v.optional(v.string()),
-            size: v.optional(v.union(v.literal("small"), v.literal("medium"), v.literal("large"))),
-        })),
+        appearance: v.optional(appearanceSchema),
         greetMessage: v.string(),
         customSystemPrompt: v.optional(v.string()),
         defaultSuggestions: v.object({

@@ -23,38 +23,84 @@ import { usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import type { PublicFile } from "@workspace/backend/private/files";
 import { Button } from "@workspace/ui/components/button";
-import {  FileIcon, MoreHorizontalIcon, PlusIcon, TrashIcon } from "lucide-react";
+import {  FileIcon, MoreHorizontalIcon, PlusIcon, TrashIcon, UploadIcon, GlobeIcon } from "lucide-react";
 import {Badge} from "@workspace/ui/components/badge";
 import { UploadDialog } from "../components/upload-dialog";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { tr } from "zod/v4/locales";
 import { DeleteFileDialog } from "../components/delete-file-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Label } from "@workspace/ui/components/label";
+import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
+import { useOrganization } from "@clerk/nextjs";
 
 const KB_FILTER_STORAGE_KEY = "files-kb-filter";
+const SOURCE_FILTER_STORAGE_KEY = "files-source-filter";
 
 export const FilesView = () => {
 
-    const knowledgeBases = useQuery(api.private.knowledgeBases.list);
-    const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string>(() => {
-      // Initialize from localStorage
-      if (typeof window !== "undefined") {
-        return localStorage.getItem(KB_FILTER_STORAGE_KEY) || "all";
-      }
-      return "all";
-    });
+    const { organization } = useOrganization();
+    const organizationId = organization?.id ?? null;
+    const scopedKbStorageKey = organizationId ? `${KB_FILTER_STORAGE_KEY}-${organizationId}` : null;
+    const scopedSourceStorageKey = organizationId ? `${SOURCE_FILTER_STORAGE_KEY}-${organizationId}` : null;
 
-    // Persist filter selection to localStorage
+    const knowledgeBases = useQuery(api.private.knowledgeBases.list);
+    const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string>("all");
+
+    const [sourceFilter, setSourceFilter] = useState<"all" | "uploaded" | "scraped">("all");
+
+    // Load persisted filters whenever organization changes
     useEffect(() => {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(KB_FILTER_STORAGE_KEY, selectedKnowledgeBaseId);
+      if (!scopedKbStorageKey || typeof window === "undefined") {
+        setSelectedKnowledgeBaseId("all");
+        return;
       }
-    }, [selectedKnowledgeBaseId]);
+      const storedKb = localStorage.getItem(scopedKbStorageKey);
+      setSelectedKnowledgeBaseId(storedKb || "all");
+    }, [scopedKbStorageKey]);
+
+    useEffect(() => {
+      if (!scopedSourceStorageKey || typeof window === "undefined") {
+        setSourceFilter("all");
+        return;
+      }
+      const storedSource = localStorage.getItem(scopedSourceStorageKey) as "all" | "uploaded" | "scraped" | null;
+      setSourceFilter(storedSource || "all");
+    }, [scopedSourceStorageKey]);
+
+    // Persist filter selections to localStorage scoped per organization
+    useEffect(() => {
+      if (!scopedKbStorageKey || typeof window === "undefined") {
+        return;
+      }
+      localStorage.setItem(scopedKbStorageKey, selectedKnowledgeBaseId);
+    }, [selectedKnowledgeBaseId, scopedKbStorageKey]);
+
+    useEffect(() => {
+      if (!scopedSourceStorageKey || typeof window === "undefined") {
+        return;
+      }
+      localStorage.setItem(scopedSourceStorageKey, sourceFilter);
+    }, [sourceFilter, scopedSourceStorageKey]);
+
+    // Ensure selected KB belongs to current organization
+    useEffect(() => {
+      if (!knowledgeBases || selectedKnowledgeBaseId === "all") {
+        return;
+      }
+      const exists = knowledgeBases.some((kb) => kb.knowledgeBaseId === selectedKnowledgeBaseId);
+      if (!exists) {
+        setSelectedKnowledgeBaseId("all");
+      }
+    }, [knowledgeBases, selectedKnowledgeBaseId]);
+
+    const hasValidKbSelection =
+      selectedKnowledgeBaseId !== "all" &&
+      !!knowledgeBases?.some((kb) => kb.knowledgeBaseId === selectedKnowledgeBaseId);
 
     const files = usePaginatedQuery(
         api.private.files.list,
-        selectedKnowledgeBaseId === "all"
+        !hasValidKbSelection
           ? {}
           : { knowledgeBaseId: selectedKnowledgeBaseId },
         {
@@ -93,6 +139,17 @@ const getKnowledgeBaseName = (knowledgeBaseId: string | null | undefined) => {
   return kb?.name || "Unknown";
 };
 
+const uniqueFiles = useMemo(() => {
+  const seen = new Map<string, PublicFile>();
+  for (const file of files.results) {
+    const key = `${file.name}-${file.knowledgeBaseId ?? "default"}`;
+    if (!seen.has(key)) {
+      seen.set(key, file);
+    }
+  }
+  return Array.from(seen.values());
+}, [files.results]);
+
 
 
 
@@ -124,24 +181,45 @@ const getKnowledgeBaseName = (knowledgeBaseId: string | null | undefined) => {
         </p>
         </div>
 
-        <div className="mt-6 space-y-2">
-          <Label htmlFor="kb-filter">Filter by Knowledge Base</Label>
-          <Select
-            value={selectedKnowledgeBaseId}
-            onValueChange={setSelectedKnowledgeBaseId}
-          >
-            <SelectTrigger id="kb-filter">
-              <SelectValue placeholder="Select knowledge base" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Knowledge Bases</SelectItem>
-              {knowledgeBases && knowledgeBases.map((kb) => (
-                <SelectItem key={kb._id} value={kb.knowledgeBaseId}>
-                  {kb.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="mt-6 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="kb-filter">Filter by Knowledge Base</Label>
+            <Select
+              value={selectedKnowledgeBaseId}
+              onValueChange={setSelectedKnowledgeBaseId}
+            >
+              <SelectTrigger id="kb-filter">
+                <SelectValue placeholder="Select knowledge base" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Knowledge Bases</SelectItem>
+                {knowledgeBases && knowledgeBases.map((kb) => (
+                  <SelectItem key={kb._id} value={kb.knowledgeBaseId}>
+                    {kb.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Filter by Source</Label>
+            <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "uploaded" | "scraped")}>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="all">
+                  All Files
+                </TabsTrigger>
+                <TabsTrigger value="uploaded">
+                  <UploadIcon className="mr-2 h-4 w-4" />
+                  Uploaded
+                </TabsTrigger>
+                <TabsTrigger value="scraped">
+                  <GlobeIcon className="mr-2 h-4 w-4" />
+                  Scraped
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         <div className="mt-8 rounded-lg border bg-background">
@@ -159,6 +237,7 @@ const getKnowledgeBaseName = (knowledgeBaseId: string | null | undefined) => {
     <TableRow>
       <TableHead className="px-6 py-4 font-medium">Name</TableHead>
       <TableHead className="px-6 py-4 font-medium">Knowledge Base</TableHead>
+      <TableHead className="px-6 py-4 font-medium">Source</TableHead>
       <TableHead className="px-6 py-4 font-medium">Type</TableHead>
       <TableHead className="px-6 py-4 font-medium">Size</TableHead>
       <TableHead className="px-6 py-4 font-medium">Actions</TableHead>
@@ -171,17 +250,22 @@ const getKnowledgeBaseName = (knowledgeBaseId: string | null | undefined) => {
     if (isLoadingFirstPage) {
       return (
         <TableRow>
-          <TableCell className="h-24 text-center" colSpan={5}>
+          <TableCell className="h-24 text-center" colSpan={6}>
             Loading files...
           </TableCell>
         </TableRow>
       );
     }
 
-    if (files.results.length === 0) {
+    // Apply source filter
+    const filteredFiles = sourceFilter === "all"
+      ? uniqueFiles
+      : uniqueFiles.filter(file => (file.sourceType || "uploaded") === sourceFilter);
+
+    if (filteredFiles.length === 0) {
         return(
             <TableRow>
-          <TableCell className="h-24 text-center" colSpan={5}>
+          <TableCell className="h-24 text-center" colSpan={6}>
            No files found
           </TableCell>
         </TableRow>
@@ -190,7 +274,7 @@ const getKnowledgeBaseName = (knowledgeBaseId: string | null | undefined) => {
     }
 
 
-    return files.results.map((file) => (
+    return filteredFiles.map((file) => (
   <TableRow className="hover:bg-muted/50" key={file.id}>
     <TableCell className="px-6 py-4">
       <div className="flex flex-col gap-1">
@@ -198,17 +282,28 @@ const getKnowledgeBaseName = (knowledgeBaseId: string | null | undefined) => {
           <FileIcon />
           <span className="font-medium">{file.name}</span>
         </div>
-        {file.originalFilename && file.originalFilename !== file.name && (
-          <span className="text-sm text-muted-foreground ml-7">
-            Original: {file.originalFilename}
-          </span>
-        )}
+        <span className="text-sm text-muted-foreground ml-7">
+          Original upload: {file.originalFilename ?? file.name}
+        </span>
       </div>
     </TableCell>
     <TableCell className="px-6 py-4">
       <Badge variant="secondary">
         {getKnowledgeBaseName(file.knowledgeBaseId)}
       </Badge>
+    </TableCell>
+    <TableCell className="px-6 py-4">
+      {file.sourceType === "scraped" ? (
+        <Badge variant="default" className="gap-1">
+          <GlobeIcon className="h-3 w-3" />
+          Scraped
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="gap-1">
+          <UploadIcon className="h-3 w-3" />
+          Uploaded
+        </Badge>
+      )}
     </TableCell>
     <TableCell className="px-6 py-4">
       <Badge

@@ -11,13 +11,14 @@ import {
 } from "@workspace/ui/components/ai/message";
 import { useVapi } from "@/modules/widget/hooks/use-vapi";
 import { WidgetHeader } from "@/modules/widget/ui/components/widget-header";
-import { useSetAtom } from "jotai";
-import { screenAtom } from "../../atoms/widget-atoms";
+import { useAtomValue, useSetAtom } from "jotai";
+import { screenAtom, widgetSettingsAtom } from "../../atoms/widget-atoms";
 import { WidgetFooter } from "../components/widget-footer";
 import { cn } from "@workspace/ui/lib/utils";
 
 export const WidgetVoiceScreen = () => {
   const setScreen = useSetAtom(screenAtom);
+  const widgetSettings = useAtomValue(widgetSettingsAtom);
   const {
     isConnected,
     isSpeaking,
@@ -25,8 +26,10 @@ export const WidgetVoiceScreen = () => {
     startCall,
     endCall,
     isConnecting,
-
+    callError,
   } = useVapi();
+
+  const canStartCall = Boolean(widgetSettings?.vapiSettings?.assistantId);
 
   return (
     <>
@@ -101,7 +104,7 @@ export const WidgetVoiceScreen = () => {
                     ) : (
                       <Button
                         className="w-full"
-                        disabled={isConnecting}
+                        disabled={isConnecting || !canStartCall}
                         size="lg"
                         onClick={() => startCall()}
 
@@ -111,6 +114,16 @@ export const WidgetVoiceScreen = () => {
                       </Button>
                     )}
                   </div>
+                  {!canStartCall && (
+                    <p className="text-center text-xs text-muted-foreground">
+                      Voice assistant is not configured for this chatbot.
+                    </p>
+                  )}
+                  {callError && (
+                    <p className="text-center text-xs text-destructive">
+                      {callError}
+                    </p>
+                  )}
 
 
 

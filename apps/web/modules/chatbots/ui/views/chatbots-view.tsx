@@ -12,12 +12,13 @@ import {
 import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Button } from "@workspace/ui/components/button";
-import { PlusIcon, TrashIcon, PencilIcon, CheckCircleIcon } from "lucide-react";
+import { PlusIcon, TrashIcon, PencilIcon, CheckCircleIcon, LinkIcon } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { useState } from "react";
 import { CreateChatbotDialog } from "../components/create-chatbot-dialog";
 import { EditChatbotDialog } from "../components/edit-chatbot-dialog";
 import { DeleteChatbotDialog } from "../components/delete-chatbot-dialog";
+import { ConnectChatbotDialog } from "../components/connect-chatbot-dialog";
 
 export const ChatbotsView = () => {
   const chatbots = useQuery(api.private.chatbots.list);
@@ -26,6 +27,7 @@ export const ChatbotsView = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [selectedChatbot, setSelectedChatbot] = useState<any | null>(null);
 
   const handleEditClick = (chatbot: any) => {
@@ -36,6 +38,11 @@ export const ChatbotsView = () => {
   const handleDeleteClick = (chatbot: any) => {
     setSelectedChatbot(chatbot);
     setDeleteDialogOpen(true);
+  };
+
+  const handleConnectClick = (chatbot: any) => {
+    setSelectedChatbot(chatbot);
+    setConnectDialogOpen(true);
   };
 
   const getKnowledgeBaseName = (kbId: string) => {
@@ -61,6 +68,12 @@ export const ChatbotsView = () => {
       <DeleteChatbotDialog
         onOpenChange={setDeleteDialogOpen}
         open={deleteDialogOpen}
+        chatbot={selectedChatbot}
+      />
+
+      <ConnectChatbotDialog
+        onOpenChange={setConnectDialogOpen}
+        open={connectDialogOpen}
         chatbot={selectedChatbot}
       />
 
@@ -95,7 +108,7 @@ export const ChatbotsView = () => {
                       <TableHead>Knowledge Base</TableHead>
                       <TableHead>Last Updated</TableHead>
                       <TableHead>Created</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
+                      <TableHead className="w-[180px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -125,6 +138,14 @@ export const ChatbotsView = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleConnectClick(chatbot)}
+                            >
+                              <LinkIcon className="mr-2 h-4 w-4" />
+                              Connect
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
