@@ -6,6 +6,7 @@ import { chatBubbleIcon, closeIcon } from './icons';
   let container: HTMLDivElement | null = null;
   let button: HTMLButtonElement | null = null;
   let isOpen = false;
+  let launcherIconUrl: string | null = null;
 
   // Get configuration from script tag
   let organizationId: string | null = null;
@@ -53,7 +54,6 @@ import { chatBubbleIcon, closeIcon } from './icons';
     // Create floating action button
     button = document.createElement('button');
     button.id = 'echo-widget-button';
-    button.innerHTML = chatBubbleIcon;
     button.style.cssText = `
       position: fixed;
       ${position === 'bottom-right' ? 'right: 20px;' : 'left: 20px;'}
@@ -80,6 +80,7 @@ import { chatBubbleIcon, closeIcon } from './icons';
     button.addEventListener('mouseleave', () => {
       if (button) button.style.transform = 'scale(1)';
     });
+    setIdleButtonIcon();
     
     document.body.appendChild(button);
     
@@ -156,6 +157,12 @@ import { chatBubbleIcon, closeIcon } from './icons';
           customPrimaryColor = payload.primaryColor; // Store the custom color
           button.style.background = payload.primaryColor;
         }
+        if (payload.launcherIconUrl !== undefined) {
+          launcherIconUrl = payload.launcherIconUrl;
+          if (!isOpen) {
+            setIdleButtonIcon();
+          }
+        }
         // Update container size if size is provided
         if (payload.size && container) {
           const sizes = {
@@ -204,9 +211,28 @@ import { chatBubbleIcon, closeIcon } from './icons';
       setTimeout(() => {
         if (container) container.style.display = 'none';
       }, 300);
-      // Change button icon back to chat
-      button.innerHTML = chatBubbleIcon;
+      // Change button icon back to chat or custom logo
+      setIdleButtonIcon();
       button.style.background = customPrimaryColor; // Use stored custom color
+    }
+  }
+
+  function setIdleButtonIcon() {
+    if (!button) {
+      return;
+    }
+
+    if (launcherIconUrl) {
+      button.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = launcherIconUrl;
+      img.alt = 'Open chat';
+      img.style.maxWidth = '60%';
+      img.style.maxHeight = '60%';
+      img.style.objectFit = 'contain';
+      button.appendChild(img);
+    } else {
+      button.innerHTML = chatBubbleIcon;
     }
   }
   

@@ -34,7 +34,8 @@ import {
   AIMessageContent,
 } from "@workspace/ui/components/ai/message";
 import { AIResponse } from "@workspace/ui/components/ai/response";
-import { useMemo } from "react";
+import { TypingIndicator } from "@workspace/ui/components/ai/typing-indicator";
+import { useMemo, useState, useEffect, useRef } from "react";
 
 const formSchema = z.object({
   message: z.string().min(1,"Message is required"),
@@ -46,14 +47,21 @@ const formSchema = z.object({
 
 export const WidgetChatScreen = () => {
   const setScreen = useSetAtom(screenAtom);
-  const setConversationId = useSetAtom(conversationIdAtom); 
+  const setConversationId = useSetAtom(conversationIdAtom);
 
   const widgetSettings = useAtomValue(widgetSettingsAtom);
+    const assistantLogoUrl = widgetSettings?.appearance?.logo?.url ?? undefined;
+
   const conversationId = useAtomValue(conversationIdAtom);
   const organizationId = useAtomValue(organizationIdAtom);
   const contactSessionId = useAtomValue(
     contactSessionIdAtomFamily(organizationId || "")
   );
+
+  const [isAITyping, setIsAITyping] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState(false);
+  const previousMessageCountRef = useRef(0);
+  const previousUserMessageCountRef = useRef(0);
 
    const onBack = () => {
     setConversationId(null);
@@ -121,6 +129,7 @@ export const WidgetChatScreen = () => {
     }
 
     form.reset();
+    setPendingUserMessage(true);
 
     await createMessage({
       threadId: conversation.threadId,
@@ -128,6 +137,40 @@ export const WidgetChatScreen = () => {
       contactSessionId,
     });
   };
+
+  // Handle typing animation flow
+  useEffect(() => {
+    const uiMessages = toUIMessages(messages.results ?? []);
+    const currentMessageCount = uiMessages?.length || 0;
+    const userMessages = uiMessages?.filter(m => m.role === "user") || [];
+    const currentUserMessageCount = userMessages.length;
+
+    // When user's message appears, show typing indicator
+    if (pendingUserMessage && currentUserMessageCount > previousUserMessageCountRef.current) {
+      setPendingUserMessage(false);
+      setIsAITyping(true);
+    }
+
+    // When AI responds, hide typing indicator (check if message count increased)
+    if (currentMessageCount > previousMessageCountRef.current) {
+      const lastMessage = uiMessages?.[uiMessages.length - 1];
+      if (lastMessage?.role === "assistant") {
+        setIsAITyping(false);
+      }
+    }
+
+    // Failsafe: If typing is showing but last message is assistant, hide it
+    if (isAITyping && currentMessageCount > 0) {
+      const lastMessage = uiMessages?.[uiMessages.length - 1];
+      if (lastMessage?.role === "assistant" && currentMessageCount === previousMessageCountRef.current) {
+        // Message hasn't changed but typing is still showing
+        setIsAITyping(false);
+      }
+    }
+
+    previousMessageCountRef.current = currentMessageCount;
+    previousUserMessageCountRef.current = currentUserMessageCount;
+  }, [messages.results, isAITyping, pendingUserMessage]);
 
 
 
@@ -157,6 +200,11 @@ export const WidgetChatScreen = () => {
 
 
             </Button>
+            <DicebearAvatar
+              imageUrl={assistantLogoUrl}
+              seed={widgetSettings?.chatbotName || "assistant"}
+              size={32}
+            />
             <p>{widgetSettings?.chatbotName || "Support Assistant"}</p>
 
 
@@ -196,18 +244,31 @@ export const WidgetChatScreen = () => {
                 </AIMessageContent>
 
                 {message.role === "assistant" && (
-                <DicebearAvatar
-                  imageUrl="/logo (1).svg"
-                  seed="assistant"
-                  size={32}
-                />
-              )}
+                  <DicebearAvatar
+                    imageUrl={assistantLogoUrl}
+                    seed={widgetSettings?.chatbotName || "assistant"}
+                    size={32}
+                  />
+                )}
 
 
 
               </AIMessage>
             );
           })}
+
+          {isAITyping && (
+            <AIMessage from="assistant">
+              <AIMessageContent>
+                <TypingIndicator />
+              </AIMessageContent>
+              <DicebearAvatar
+                imageUrl={assistantLogoUrl}
+                seed={widgetSettings?.chatbotName || "assistant"}
+                size={32}
+              />
+            </AIMessage>
+          )}
         </AIConversationContent>
     </AIConversation>
     {toUIMessages(messages.results ?? [])?.length === 1 && (

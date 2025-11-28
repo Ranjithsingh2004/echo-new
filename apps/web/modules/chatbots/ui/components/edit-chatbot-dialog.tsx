@@ -2,6 +2,7 @@
 
 import { useMutation } from "convex/react";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,8 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Checkbox } from "@workspace/ui/components/checkbox";
+import { Separator } from "@workspace/ui/components/separator";
+import { Settings } from "lucide-react";
 import { api } from "@workspace/backend/_generated/api";
 import { toast } from "sonner";
 import type { Id } from "@workspace/backend/_generated/dataModel";
@@ -33,6 +36,7 @@ export const EditChatbotDialog = ({
   knowledgeBases,
 }: EditChatbotDialogProps) => {
   const updateChatbot = useMutation(api.private.chatbots.update);
+  const router = useRouter();
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [form, setForm] = useState({
@@ -79,6 +83,11 @@ export const EditChatbotDialog = ({
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleCustomize = () => {
+    onOpenChange(false);
+    router.push("/customization");
   };
 
   return (
@@ -131,6 +140,23 @@ export const EditChatbotDialog = ({
             <Label htmlFor="edit-default" className="cursor-pointer">
               Set as default chatbot
             </Label>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={handleCustomize}
+              type="button"
+            >
+              <Settings className="h-4 w-4" />
+              Customize Appearance & Advanced Settings
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Configure theme, colors, system prompts, suggestions, and voice settings
+            </p>
           </div>
         </div>
 

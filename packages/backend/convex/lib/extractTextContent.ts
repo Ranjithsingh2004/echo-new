@@ -102,23 +102,42 @@ async function extractPdfText(
   mimeType: string,
   filename: string,
 ): Promise<string> {
-  const result = await generateText({
-    model: AI_MODELS.pdf,
-    system: SYSTEM_PROMPTS.pdf,
-    messages: [
-      {
-        role: "user",
-        content:[
-            {type:"file",data: new URL(url),mimeType,filename},
-            {
-                type:"text",
-                text:"Extract the text from the PDF and print it without explaining you'll do so."
-            }
-        ]
-      }
-    ]
-  });
-  return result.text;
+  try {
+    console.log(`[extractPdfText] Starting extraction for ${filename} using GPT-4o (upgraded model for large files)`);
+
+    // For large PDFs, we need to use GPT-4o which supports much larger outputs
+    // GPT-4o can handle up to 16K output tokens vs GPT-4o-mini's 16K
+    // But more importantly, GPT-4o can process larger input contexts
+    const result = await generateText({
+      model: openai.chat('gpt-4o'),  // Use full GPT-4o for better extraction
+      system: "You are a PDF text extractor. Extract ALL text from the document, preserving structure and paragraphs. Output ONLY the extracted text with no explanations or metadata. Be thorough and extract every page.",
+      messages: [
+        {
+          role: "user",
+          content:[
+              {type:"file", data: new URL(url), mimeType, filename},
+              {
+                  type:"text",
+                  text:"Extract the complete text content from this entire PDF document. Include every page, every paragraph, every sentence. Preserve the document structure with paragraph breaks. Do not summarize - extract the full text verbatim."
+              }
+          ]
+        }
+      ],
+      maxTokens: 16000, // Maximum output tokens
+    });
+
+    const extractedLength = result.text.length;
+    console.log(`[extractPdfText] Extracted ${extractedLength} characters from ${filename}`);
+
+    if (extractedLength < 1000) {
+      console.warn(`[extractPdfText] Warning: Only ${extractedLength} characters extracted from ${filename}. File may be scanned/image-based or very large.`);
+    }
+
+    return result.text;
+  } catch (error) {
+    console.error(`[extractPdfText] Error extracting PDF ${filename}:`, error);
+    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 

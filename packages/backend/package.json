@@ -24,6 +24,8 @@
     "convex": "^1.25.4",
     "convex-helpers": "0.1.100",
     "nanoid": "^5.0.9",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.4.394",
     "svix": "^1.81.0",
     "zod": "3.25.76"
   }

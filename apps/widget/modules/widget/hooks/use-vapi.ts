@@ -1,5 +1,5 @@
 import Vapi from "@vapi-ai/web";
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { vapiSecretsAtom, widgetSettingsAtom } from "../atoms/widget-atoms";
 import { useAtomValue } from "jotai";
 
@@ -17,84 +17,99 @@ export const useVapi = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
+    const [callError, setCallError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if(!vapiSecrets){
-        return;
-    }
-
-
-
-    const vapiInstance = new Vapi(vapiSecrets.publicApiKey);
-    setVapi(vapiInstance);
-    
-    vapiInstance.on("call-start",() =>{
-        setIsConnected(true);
-
-        setIsConnecting(false);  
-        
-        setTranscript([]);
-    });
-
-    vapiInstance.on("call-end",() =>{
-        setIsConnected(false);
-
-        setIsConnecting(false);  
-        
-        setIsSpeaking(false);
-    });
-
-    vapiInstance.on("speech-start",() =>{
-        setIsSpeaking(true);
-    });
-
-    vapiInstance.on("speech-end",() =>{
-        setIsSpeaking(false);
-    }); 
-
-    vapiInstance.on("error",(error) => {
-        console.log(error,"VAPI_ERROR");
-        setIsConnecting(false);
-    });
-
-    vapiInstance.on("message",(message) => {
-        if(message.type === "transcript" && message.transcriptType === "final"){
-            setTranscript((prev) => [
-                ...prev,
-                {
-                    role: message.role === "user" ? "user" : "assistant",
-                    text: message.transcript,
-                }
-            ]);
+    useEffect(() => {
+        if (!vapiSecrets?.publicApiKey) {
+            return;
         }
-    });     
 
-    return () => {
-        vapiInstance?.stop();
-    }
+        const instance = new Vapi(vapiSecrets.publicApiKey);
+        setVapi(instance);
 
+        const resetConnectionState = () => {
+            setIsConnected(false);
+            setIsConnecting(false);
+            setIsSpeaking(false);
+        };
 
-    },[]);
+        instance.on("call-start", () => {
+            setIsConnected(true);
+            setIsConnecting(false);
+            setTranscript([]);
+            setCallError(null);
+        });
 
-    const startCall = () =>{
+        instance.on("call-end", resetConnectionState);
 
-        if(!vapiSecrets || !widgetSettings?.vapiSettings?.assistantId){
-        return;
-        }
-        setIsConnecting(true)
+        instance.on("speech-start", () => {
+            setIsSpeaking(true);
+        });
 
-        if(vapi){
-            vapi.start(widgetSettings.vapiSettings.assistantId);
-        }
-    }
+        instance.on("speech-end", () => {
+            setIsSpeaking(false);
+        });
 
-    const endCall = () =>{
-    
+        instance.on("error", (error) => {
+            console.error(error, "VAPI_ERROR");
+            resetConnectionState();
+            setCallError(getReadableError(error));
+        });
 
-        if(vapi){
-            vapi.stop();
-        }
-    };
+        instance.on("message", (message) => {
+            if (message.type === "transcript" && message.transcriptType === "final") {
+                setTranscript((prev) => [
+                    ...prev,
+                    {
+                        role: message.role === "user" ? "user" : "assistant",
+                        text: message.transcript,
+                    },
+                ]);
+            }
+        });
+
+        return () => {
+            instance.removeAllListeners();
+            instance.stop().catch(() => undefined);
+            setVapi(null);
+            resetConnectionState();
+        };
+    }, [vapiSecrets?.publicApiKey]);
+
+        const startCall = async () => {
+            if (
+                !vapiSecrets ||
+                !widgetSettings?.vapiSettings?.assistantId ||
+                !vapi ||
+                isConnecting ||
+                isConnected
+            ) {
+                return;
+            }
+
+            setIsConnecting(true);
+            setCallError(null);
+            try {
+                await vapi.start(widgetSettings.vapiSettings.assistantId);
+            } catch (error) {
+                console.error(error, "VAPI_START_ERROR");
+                setCallError(getReadableError(error));
+                setIsConnecting(false);
+            }
+        };
+
+        const endCall = async () => {
+            if (!vapi) {
+                return;
+            }
+
+            setIsConnecting(false);
+            try {
+                await vapi.stop();
+            } catch (error) {
+                console.error(error, "VAPI_STOP_ERROR");
+            }
+        };
 
     return {
         isSpeaking,
@@ -103,5 +118,16 @@ export const useVapi = () => {
         startCall,
         endCall,
         transcript,
+        vapi,
+        callError,
     }
 };
+
+function getReadableError(error: unknown): string {
+    if (error && typeof error === "object") {
+        if ("message" in error && typeof (error as { message?: string }).message === "string") {
+            return (error as { message: string }).message;
+        }
+    }
+    return "We couldn't start the voice call. Please try again.";
+}

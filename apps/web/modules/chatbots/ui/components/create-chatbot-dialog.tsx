@@ -16,9 +16,43 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Checkbox } from "@workspace/ui/components/checkbox";
+import { RadioGroup, RadioGroupItem } from "@workspace/ui/components/radio-group";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/ui/components/collapsible";
+import { ChevronDown } from "lucide-react";
 import { api } from "@workspace/backend/_generated/api";
 import { toast } from "sonner";
 import type { Id } from "@workspace/backend/_generated/dataModel";
+import { THEME_PRESETS, type ThemePreset } from "../../constants/theme-presets";
+
+type ChatbotFormState = {
+  name: string;
+  knowledgeBaseId: string;
+  greetMessage: string;
+  customSystemPrompt: string;
+  primaryColor: string;
+  size: "small" | "medium" | "large";
+  isDefault: boolean;
+  suggestion1: string;
+  suggestion2: string;
+  suggestion3: string;
+  assistantId: string;
+  phoneNumber: string;
+};
+
+const createInitialFormState = (): ChatbotFormState => ({
+  name: "",
+  knowledgeBaseId: "",
+  greetMessage: "Hi! How can I help you?",
+  customSystemPrompt: "",
+  primaryColor: THEME_PRESETS.classic.primaryColor,
+  size: "medium",
+  isDefault: false,
+  suggestion1: "",
+  suggestion2: "",
+  suggestion3: "",
+  assistantId: "",
+  phoneNumber: "",
+});
 
 interface CreateChatbotDialogProps {
   open: boolean;
@@ -34,20 +68,9 @@ export const CreateChatbotDialog = ({
   const createChatbot = useMutation(api.private.chatbots.create);
 
   const [isCreating, setIsCreating] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    knowledgeBaseId: "",
-    greetMessage: "Hi! How can I help you?",
-    customSystemPrompt: "",
-    primaryColor: "",
-    size: "medium" as "small" | "medium" | "large",
-    isDefault: false,
-    suggestion1: "",
-    suggestion2: "",
-    suggestion3: "",
-    assistantId: "",
-    phoneNumber: "",
-  });
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<ThemePreset>("classic");
+  const [form, setForm] = useState<ChatbotFormState>(createInitialFormState());
 
   const handleCreate = async () => {
     if (!form.name.trim() || !form.knowledgeBaseId) {
@@ -89,21 +112,15 @@ export const CreateChatbotDialog = ({
     }
   };
 
+  const handleThemeChange = (theme: ThemePreset) => {
+    setSelectedTheme(theme);
+    setForm((prev) => ({ ...prev, primaryColor: THEME_PRESETS[theme].primaryColor }));
+  };
+
   const handleCancel = () => {
-    setForm({
-      name: "",
-      knowledgeBaseId: "",
-      greetMessage: "Hi! How can I help you?",
-      customSystemPrompt: "",
-      primaryColor: "",
-      size: "medium",
-      isDefault: false,
-      suggestion1: "",
-      suggestion2: "",
-      suggestion3: "",
-      assistantId: "",
-      phoneNumber: "",
-    });
+    setForm(createInitialFormState());
+    setSelectedTheme("classic");
+    setShowAdvanced(false);
     onOpenChange(false);
   };
 
@@ -153,6 +170,110 @@ export const CreateChatbotDialog = ({
               rows={2}
             />
           </div>
+
+          <div className="space-y-3">
+            <Label>Theme</Label>
+            <RadioGroup value={selectedTheme} onValueChange={handleThemeChange}>
+              <div className="grid grid-cols-2 gap-3">
+                {(Object.keys(THEME_PRESETS) as ThemePreset[]).map((themeKey) => {
+                  const theme = THEME_PRESETS[themeKey];
+                  return (
+                    <div key={themeKey} className="relative">
+                      <RadioGroupItem
+                        value={themeKey}
+                        id={themeKey}
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor={themeKey}
+                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-transparent p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary cursor-pointer"
+                      >
+                        <div className="mb-2 h-8 w-8 rounded-full" style={{ backgroundColor: theme.primaryColor }} />
+                        <div className="text-center">
+                          <div className="font-semibold">{theme.name}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{theme.description}</div>
+                        </div>
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </RadioGroup>
+          </div>
+
+          <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full justify-between p-0 hover:bg-transparent">
+                <span className="text-sm font-medium">Advanced Options (Optional)</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="custom-color">Custom Primary Color</Label>
+                <div className="flex items-center gap-x-2">
+                  <Input
+                    id="custom-color"
+                    placeholder={form.primaryColor}
+                    value={form.primaryColor}
+                    onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
+                  />
+                  <Input
+                    className="h-10 w-20 cursor-pointer"
+                    onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
+                    type="color"
+                    value={form.primaryColor}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Override theme color with custom hex value</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="size">Widget Size</Label>
+                <Select value={form.size} onValueChange={(value: "small" | "medium" | "large") => setForm({ ...form, size: value })}>
+                  <SelectTrigger id="size">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="small">Small</SelectItem>
+                    <SelectItem value="medium">Medium (Default)</SelectItem>
+                    <SelectItem value="large">Large</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="system-prompt">Custom System Prompt</Label>
+                <Textarea
+                  id="system-prompt"
+                  placeholder="Optional: Custom AI behavior instructions"
+                  value={form.customSystemPrompt}
+                  onChange={(e) => setForm({ ...form, customSystemPrompt: e.target.value })}
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">Customize AI personality and behavior</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Default Suggestions</Label>
+                <Input
+                  placeholder="Suggestion 1"
+                  value={form.suggestion1}
+                  onChange={(e) => setForm({ ...form, suggestion1: e.target.value })}
+                />
+                <Input
+                  placeholder="Suggestion 2"
+                  value={form.suggestion2}
+                  onChange={(e) => setForm({ ...form, suggestion2: e.target.value })}
+                />
+                <Input
+                  placeholder="Suggestion 3"
+                  value={form.suggestion3}
+                  onChange={(e) => setForm({ ...form, suggestion3: e.target.value })}
+                />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           <div className="flex items-center space-x-2">
             <Checkbox

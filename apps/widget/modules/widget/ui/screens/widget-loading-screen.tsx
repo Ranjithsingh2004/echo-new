@@ -2,7 +2,7 @@
 import { useState,useEffect } from "react";
 import { useSetAtom, useAtomValue } from "jotai";
 import {  LoaderIcon } from "lucide-react";
-import { chatbotIdAtom, contactSessionIdAtomFamily, errorMessageAtom, loadingMessageAtom, organizationIdAtom, screenAtom, vapiSecretsAtom, widgetSettingsAtom } from "@/modules/widget/atoms/widget-atoms";
+import { chatbotIdAtom, contactSessionIdAtomFamily, errorMessageAtom, loadingMessageAtom, organizationIdAtom, screenAtom, vapiSecretsAtom, widgetSettingsAtom, type WidgetSettings } from "@/modules/widget/atoms/widget-atoms";
 import { WidgetHeader } from "@/modules/widget/ui/components/widget-header";
 import { api } from "@workspace/backend/_generated/api";
 import { useAction,useMutation, useQuery } from "convex/react";
@@ -146,7 +146,7 @@ export const WidgetLoadingScreen = ({ organizationId, chatbotId }: { organizatio
         setLoadingMessage("Loading chatbot settings...");
 
         if (widgetSettings !== undefined) {
-          setWidgetSettings(widgetSettings);
+          setWidgetSettings(toWidgetSettings(widgetSettings));
 
           console.log('[WidgetLoadingScreen] Got widgetSettings, chatbotId in settings:', (widgetSettings as any)?.chatbotId);
           console.log('[WidgetLoadingScreen] Current chatbotId from URL prop:', chatbotId);
@@ -159,13 +159,14 @@ export const WidgetLoadingScreen = ({ organizationId, chatbotId }: { organizatio
 
           // Send appearance settings to parent window (embed script)
           const appearance = widgetSettings?.appearance;
-          if (appearance?.primaryColor || appearance?.size) {
+          if (appearance) {
             window.parent.postMessage(
               {
                 type: 'updateAppearance',
                 payload: {
                   primaryColor: appearance?.primaryColor,
                   size: appearance?.size || 'medium',
+                  launcherIconUrl: appearance?.logo?.url ?? null,
                 },
               },
               '*'
@@ -263,3 +264,31 @@ export const WidgetLoadingScreen = ({ organizationId, chatbotId }: { organizatio
     </>
   );
 };
+
+function toWidgetSettings(settings: any): WidgetSettings {
+  if (!settings) {
+    return {
+      chatbotName: "Support Assistant",
+      greetMessage: "Hi! How can I help you?",
+      defaultSuggestions: {},
+      vapiSettings: {},
+    };
+  }
+
+  return {
+    chatbotId: settings.chatbotId ?? undefined,
+    chatbotName: settings.chatbotName ?? "Support Assistant",
+    greetMessage: settings.greetMessage ?? "Hi! How can I help you?",
+    customSystemPrompt: settings.customSystemPrompt ?? undefined,
+    appearance: settings.appearance ?? undefined,
+    defaultSuggestions: {
+      suggestion1: settings.defaultSuggestions?.suggestion1 ?? undefined,
+      suggestion2: settings.defaultSuggestions?.suggestion2 ?? undefined,
+      suggestion3: settings.defaultSuggestions?.suggestion3 ?? undefined,
+    },
+    vapiSettings: {
+      assistantId: settings.vapiSettings?.assistantId ?? undefined,
+      phoneNumber: settings.vapiSettings?.phoneNumber ?? undefined,
+    },
+  };
+}

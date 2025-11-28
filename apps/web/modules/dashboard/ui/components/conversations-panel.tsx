@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {formatDistanceToNow} from "date-fns";
 import {
   Select,
@@ -11,6 +12,7 @@ import {
 import { ListIcon, ArrowRightIcon, ArrowUpIcon, CheckIcon, CornerUpLeftIcon } from "lucide-react";
 import {ScrollArea} from "@workspace/ui/components/scroll-area"
 import { api } from "@workspace/backend/_generated/api";
+import type { Id } from "@workspace/backend/_generated/dataModel";
 import { usePaginatedQuery } from "convex/react";
 import { getCountryFromTimezone } from "@/lib/country-utils";
 import Link from "next/link";
@@ -20,11 +22,29 @@ import { DicebearAvatar } from "@workspace/ui/components/dicebear-avatar";
 import {ConversationStatusIcon} from "@workspace/ui/components/conversation-status-icon";
 import { getCountryFlagUrl } from "@/lib/country-utils";
 import { useAtomValue,useSetAtom } from "jotai/react";
-import { statusFilterAtom, chatbotFilterAtom } from "../../atoms";
+import { useOrganization } from "@clerk/nextjs";
 import {useInfiniteScroll} from "@workspace/ui/hooks/use-infinite-scroll"
 import {InfiniteScrollTrigger} from "@workspace/ui/components/infinite-scroll-trigger"
 import { Skeleton } from "@workspace/ui/components/skeleton";
+import { statusFilterAtom, chatbotFilterAtom } from "../../atoms";
+import { STATUS_FILTER_KEY, CHATBOT_FILTER_KEY } from "../../constants";
 import { useQuery } from "convex/react";
+
+const STATUS_FILTER_VALUES = new Set([
+  "all",
+  "unresolved",
+  "escalated",
+  "resolved",
+]);
+
+const parseStatusFilter = (
+  value: string | null,
+): "all" | "unresolved" | "escalated" | "resolved" => {
+  if (value && STATUS_FILTER_VALUES.has(value)) {
+    return value as "all" | "unresolved" | "escalated" | "resolved";
+  }
+  return "all";
+};
 
 
 
@@ -36,8 +56,66 @@ export const ConversationsPanel = () => {
     const setStatusFilter = useSetAtom(statusFilterAtom);
     const chatbotFilter = useAtomValue(chatbotFilterAtom);
     const setChatbotFilter = useSetAtom(chatbotFilterAtom);
-
+    const { organization } = useOrganization();
+    const organizationId = organization?.id ?? null;
     const chatbots = useQuery(api.private.chatbots.list);
+
+    useEffect(() => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      if (!organizationId) {
+        setStatusFilter("all");
+        setChatbotFilter("all");
+        return;
+      }
+
+      const scopedStatusKey = `${STATUS_FILTER_KEY}:${organizationId}`;
+      const scopedChatbotKey = `${CHATBOT_FILTER_KEY}:${organizationId}`;
+
+      const storedStatus = localStorage.getItem(scopedStatusKey);
+      setStatusFilter(parseStatusFilter(storedStatus));
+
+      const storedChatbot = localStorage.getItem(scopedChatbotKey);
+      const resolvedChatbot =
+        storedChatbot && storedChatbot !== "all"
+          ? (storedChatbot as Id<"chatbots">)
+          : "all";
+      setChatbotFilter(resolvedChatbot);
+    }, [organizationId, setStatusFilter, setChatbotFilter]);
+
+    useEffect(() => {
+      if (typeof window === "undefined" || !organizationId) {
+        return;
+      }
+
+      const scopedStatusKey = `${STATUS_FILTER_KEY}:${organizationId}`;
+      localStorage.setItem(scopedStatusKey, statusFilter);
+    }, [organizationId, statusFilter]);
+
+    useEffect(() => {
+      if (typeof window === "undefined" || !organizationId) {
+        return;
+      }
+
+      const scopedChatbotKey = `${CHATBOT_FILTER_KEY}:${organizationId}`;
+      localStorage.setItem(scopedChatbotKey, chatbotFilter);
+    }, [organizationId, chatbotFilter]);
+
+    useEffect(() => {
+      if (!chatbots || chatbotFilter === "all") {
+        return;
+      }
+
+      const matchesCurrentOrg = chatbots.some(
+        (chatbot) => chatbot._id === chatbotFilter,
+      );
+
+      if (!matchesCurrentOrg) {
+        setChatbotFilter("all");
+      }
+    }, [chatbots, chatbotFilter, setChatbotFilter]);
 
     const conversations = usePaginatedQuery(
         api.private.conversations.getMany,

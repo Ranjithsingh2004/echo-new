@@ -22,13 +22,17 @@ import {
 import { Input } from "@workspace/ui/components/input";
 import { Separator } from "@workspace/ui/components/separator";
 import { Textarea } from "@workspace/ui/components/textarea";
+import { RadioGroup, RadioGroupItem } from "@workspace/ui/components/radio-group";
+import { Label } from "@workspace/ui/components/label";
 import { Doc } from "@workspace/backend/_generated/dataModel";
 import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { VapiFormFields } from "./vapi-form-fields";
+import { LogoManager } from "./logo-manager";
 import { FormSchema } from "../../types";
 import { widgetSettingsSchema } from "../../schemas";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { THEME_PRESETS, type ThemePreset } from "@/modules/chatbots/constants/theme-presets";
 
 type Chatbot = Doc<"chatbots">;
 
@@ -42,6 +46,16 @@ export const CustomizationForm = ({
   hasVapiPlugin,
 }: CustomizationFormProps) => {
   const updateChatbot = useMutation(api.private.chatbots.update);
+
+  // Determine initial theme based on current color
+  const getInitialTheme = (): ThemePreset => {
+    const currentColor = chatbot.appearance?.primaryColor;
+    if (currentColor === THEME_PRESETS.dark.primaryColor) return "dark";
+    if (currentColor === THEME_PRESETS.classic.primaryColor) return "classic";
+    return "classic"; // default
+  };
+
+  const [selectedTheme, setSelectedTheme] = useState<ThemePreset>(getInitialTheme());
 
   const form = useForm<FormSchema>({
     resolver: zodResolver(widgetSettingsSchema),
@@ -65,8 +79,14 @@ export const CustomizationForm = ({
     },
   });
 
+  const handleThemeChange = (theme: ThemePreset) => {
+    setSelectedTheme(theme);
+    form.setValue("appearance.primaryColor", THEME_PRESETS[theme].primaryColor);
+  };
+
   // Reset form when chatbot changes
   useEffect(() => {
+    setSelectedTheme(getInitialTheme());
     form.reset({
       chatbotName: chatbot.name || "Support Assistant",
       greetMessage: chatbot.greetMessage || "Hi! How can I help you?",
@@ -206,12 +226,45 @@ return (
                 Customize the look and feel of your chat widget
               </p>
               <div className="space-y-4">
+                <LogoManager chatbotId={chatbot.chatbotId} logo={chatbot.appearance?.logo ?? undefined} />
+                <div className="space-y-3">
+                  <FormLabel>Theme Preset</FormLabel>
+                  <RadioGroup value={selectedTheme} onValueChange={handleThemeChange}>
+                    <div className="grid grid-cols-2 gap-3">
+                      {(Object.keys(THEME_PRESETS) as ThemePreset[]).map((themeKey) => {
+                        const theme = THEME_PRESETS[themeKey];
+                        return (
+                          <div key={themeKey} className="relative">
+                            <RadioGroupItem
+                              value={themeKey}
+                              id={`theme-${themeKey}`}
+                              className="peer sr-only"
+                            />
+                            <Label
+                              htmlFor={`theme-${themeKey}`}
+                              className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-transparent p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary cursor-pointer"
+                            >
+                              <div className="mb-2 h-8 w-8 rounded-full" style={{ backgroundColor: theme.primaryColor }} />
+                              <div className="text-center">
+                                <div className="font-semibold">{theme.name}</div>
+                                <div className="text-xs text-muted-foreground mt-1">{theme.description}</div>
+                              </div>
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </RadioGroup>
+                  <p className="text-xs text-muted-foreground">
+                    Select a theme preset or customize the color below
+                  </p>
+                </div>
                 <FormField
                   control={form.control}
                   name="appearance.primaryColor"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Primary Color</FormLabel>
+                      <FormLabel>Custom Primary Color (Optional)</FormLabel>
                       <FormControl>
                         <div className="flex items-center gap-x-2">
                           <Input
@@ -228,7 +281,7 @@ return (
                         </div>
                       </FormControl>
                       <FormDescription>
-                        Main color for buttons and highlights. Leave empty for default blue (#3B82F6)
+                        Override theme color with custom hex value
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

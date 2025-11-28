@@ -110,7 +110,7 @@ export const WidgetSelectionScreen = () => {
         >
           <div className="flex items-center gap-x-2">
             <MicIcon className="size-4" />
-            <span>Start Voice Call</span>
+            <span>Start Voice Chat</span>
           </div>
           <ChevronRightIcon />
         </Button>
