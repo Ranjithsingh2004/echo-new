@@ -145,9 +145,10 @@ export const deleteKnowledgeBase = mutation({
       .collect();
 
     if (chatbotsUsingKB.length > 0) {
+      const chatbotNames = chatbotsUsingKB.map(cb => cb.name).join(", ");
       throw new ConvexError({
         code: "BAD_REQUEST",
-        message: "Cannot delete knowledge base that is in use by chatbots",
+        message: `Cannot delete knowledge base. It's currently assigned to ${chatbotsUsingKB.length} chatbot${chatbotsUsingKB.length > 1 ? 's' : ''}: ${chatbotNames}. Please change or deselect the knowledge base from ${chatbotsUsingKB.length > 1 ? 'these chatbots' : 'this chatbot'} before deletion.`,
       });
     }
 

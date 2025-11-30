@@ -8,7 +8,7 @@ import { resolveConversation } from "../system/ai/tools/resolveConversation";
 import { escalateConversation } from "../system/ai/tools/escalateConversation";
 import { saveMessage } from "@convex-dev/agent";
 import { search } from "../system/ai/tools/search";
-import { SUPPORT_AGENT_PROMPT } from "../system/ai/constants";
+import { SUPPORT_AGENT_PROMPT, createCustomAgentPrompt } from "../system/ai/constants";
 
 
 export const create = action({
@@ -97,14 +97,15 @@ export const create = action({
     if(shouldTriggerAgent){
           // Use custom system prompt if available
           if (customPrompt) {
-            // Create a temporary agent with custom instructions
+            // Create a temporary agent with custom instructions merged with core template
             const { Agent } = await import("@convex-dev/agent");
             const { openai } = await import("@ai-sdk/openai");
 
             const customAgent = new Agent(components.agent, {
               chat: openai.chat('gpt-4o-mini'),
-              instructions: customPrompt,
+              instructions: createCustomAgentPrompt(customPrompt), // Merge custom with core template
               tools: {
+                search,
                 resolveConversation,
                 escalateConversation,
               }
@@ -116,9 +117,9 @@ export const create = action({
               {
                 prompt: args.prompt,
                 tools: {
+                  search,
                   resolveConversation,
                   escalateConversation,
-                  search,
                 }
               }
             );
@@ -130,9 +131,9 @@ export const create = action({
               {
                 prompt: args.prompt,
                 tools: {
+                  search,
                   resolveConversation,
                   escalateConversation,
-                  search,
                 }
               }
             );

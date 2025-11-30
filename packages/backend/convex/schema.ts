@@ -164,4 +164,31 @@ export default defineSchema({
     users: defineTable({
         name: v.string(),
     }),
+
+    notifications: defineTable({
+        organizationId: v.string(),
+        type: v.union(
+            v.literal("file_ready"),
+            v.literal("file_failed"),
+            v.literal("file_processing")
+        ),
+        title: v.string(),
+        message: v.string(),
+        fileId: v.optional(v.string()),
+        fileName: v.optional(v.string()),
+        read: v.boolean(),
+        createdAt: v.number(),
+    })
+    .index("by_organization_id", ["organizationId"])
+    .index("by_organization_id_and_read", ["organizationId", "read"])
+    .index("by_created_at", ["createdAt"]),
+
+    fileChangeTracker: defineTable({
+        organizationId: v.string(),
+        knowledgeBaseId: v.optional(v.string()),
+        lastChange: v.number(),
+        changeType: v.union(v.literal("add"), v.literal("delete"), v.literal("update")),
+    })
+    .index("by_organization_id", ["organizationId"])
+    .index("by_knowledge_base_id", ["knowledgeBaseId"]),
 });

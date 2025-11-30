@@ -19,11 +19,12 @@ import {
 
 import { useInfiniteScroll } from "@workspace/ui/hooks/use-infinite-scroll";
 import { InfiniteScrollTrigger } from "@workspace/ui/components/infinite-scroll-trigger";
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
+import { toast } from "sonner";
 import type { PublicFile } from "@workspace/backend/private/files";
 import { Button } from "@workspace/ui/components/button";
-import {  FileIcon, MoreHorizontalIcon, PlusIcon, TrashIcon, UploadIcon, GlobeIcon } from "lucide-react";
+import {  FileIcon, MoreHorizontalIcon, PlusIcon, TrashIcon, UploadIcon, GlobeIcon, RefreshCwIcon, CheckCircle2Icon, AlertCircleIcon, Loader2Icon } from "lucide-react";
 import {Badge} from "@workspace/ui/components/badge";
 import { UploadDialog } from "../components/upload-dialog";
 import { useState, useEffect, useMemo } from "react";
@@ -124,9 +125,21 @@ const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
 const [selectedFile, setSelectedFile] = useState<PublicFile | null>(null);
+const retryFile = useMutation(api.private.files.retryFileProcessing);
+
 const handleDeleteClick = (file: PublicFile) => {
   setSelectedFile(file);
   setDeleteDialogOpen(true);
+};
+
+const handleRetryClick = async (file: PublicFile) => {
+  try {
+    await retryFile({ entryId: file.id });
+    toast.success("Retrying file processing...");
+  } catch (error) {
+    console.error(error);
+    toast.error("Failed to retry file processing");
+  }
 };
 
 const handleFileDeleted = () => {
@@ -168,6 +181,7 @@ const uniqueFiles = useMemo(() => {
     <UploadDialog
       onOpenChange={setUploadDialogOpen}
       open={uploadDialogOpen}
+      onFileUploaded={() => files.loadMore(10)}
     />
 
     <div className="flex min-h-screen flex-col bg-muted p-8">
@@ -240,6 +254,7 @@ const uniqueFiles = useMemo(() => {
       <TableHead className="px-6 py-4 font-medium">Source</TableHead>
       <TableHead className="px-6 py-4 font-medium">Type</TableHead>
       <TableHead className="px-6 py-4 font-medium">Size</TableHead>
+      <TableHead className="px-6 py-4 font-medium">Status</TableHead>
       <TableHead className="px-6 py-4 font-medium">Actions</TableHead>
 
     </TableRow>
@@ -250,7 +265,7 @@ const uniqueFiles = useMemo(() => {
     if (isLoadingFirstPage) {
       return (
         <TableRow>
-          <TableCell className="h-24 text-center" colSpan={6}>
+          <TableCell className="h-24 text-center" colSpan={7}>
             Loading files...
           </TableCell>
         </TableRow>
@@ -265,7 +280,7 @@ const uniqueFiles = useMemo(() => {
     if (filteredFiles.length === 0) {
         return(
             <TableRow>
-          <TableCell className="h-24 text-center" colSpan={6}>
+          <TableCell className="h-24 text-center" colSpan={7}>
            No files found
           </TableCell>
         </TableRow>
@@ -319,6 +334,26 @@ const uniqueFiles = useMemo(() => {
       {file.size}
     </TableCell>
     <TableCell className="px-6 py-4">
+      {file.status === "ready" && (
+        <Badge variant="default" className="gap-1 bg-green-500 hover:bg-green-600">
+          <CheckCircle2Icon className="h-3 w-3" />
+          Ready
+        </Badge>
+      )}
+      {file.status === "processing" && (
+        <Badge variant="secondary" className="gap-1">
+          <Loader2Icon className="h-3 w-3 animate-spin" />
+          Processing
+        </Badge>
+      )}
+      {file.status === "error" && (
+        <Badge variant="destructive" className="gap-1">
+          <AlertCircleIcon className="h-3 w-3" />
+          Failed
+        </Badge>
+      )}
+    </TableCell>
+    <TableCell className="px-6 py-4">
 
         <DropdownMenu>
   <DropdownMenuTrigger asChild>
@@ -332,13 +367,20 @@ const uniqueFiles = useMemo(() => {
   </DropdownMenuTrigger>
   <DropdownMenuContent align="end">
 
+    {file.status === "error" && (
+      <DropdownMenuItem onClick={() => handleRetryClick(file)}>
+        <RefreshCwIcon className="size-4 mr-2" />
+        Retry Processing
+      </DropdownMenuItem>
+    )}
+
     <DropdownMenuItem
-  className="text-destructive"
-  onClick={() => handleDeleteClick(file)}
->
-  <TrashIcon className="size-4 mr-2" />
-  Delete
-</DropdownMenuItem>
+      className="text-destructive"
+      onClick={() => handleDeleteClick(file)}
+    >
+      <TrashIcon className="size-4 mr-2" />
+      Delete
+    </DropdownMenuItem>
 
 
 
@@ -366,8 +408,8 @@ const uniqueFiles = useMemo(() => {
 
 </Table>
 
-{!isLoadingFirstPage && files.results.length > 0 && (
-  <div className="border-t">
+{!isLoadingFirstPage && uniqueFiles.length > 0 && (canLoadMore || isLoadingMore) && (
+  <div className="border-t px-6 py-4">
     <InfiniteScrollTrigger
       canLoadMore={canLoadMore}
       isLoadingMore={isLoadingMore}

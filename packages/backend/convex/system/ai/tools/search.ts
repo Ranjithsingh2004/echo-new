@@ -63,16 +63,39 @@ if (conversation.chatbotId) {
 const searchResult = await rag.search(ctx, {
   namespace: namespace,
   query: args.query,
-  limit: 50, // Increased to 50 for better coverage of large chunked files (15-20MB PDFs)
+  limit: 50, // Comprehensive search for large chunked files
 });
 
 console.log(`[search] Found ${searchResult.entries.length} results for query: "${args.query}"`);
 console.log(`[search] Result titles:`, searchResult.entries.map(e => e.title).join(", "));
 
-const contextText = `Found results in ${searchResult.entries
-  .map((e) => e.title || null)
-  .filter((t) => t !== null)
-  .join(", ")}. Here is the context:\n\n${searchResult.text}`;
+// Check if multiple different documents were found
+const uniqueDocuments = new Set(searchResult.entries.map(e => e.metadata?.displayName || e.title).filter(Boolean));
+const documentNames = Array.from(uniqueDocuments);
+
+let contextText = "";
+
+if (documentNames.length > 3) {
+  // If more than 3 documents, list them and ask user to clarify
+  contextText = `Found information in multiple documents: ${documentNames.slice(0, 5).join(", ")}${documentNames.length > 5 ? `, and ${documentNames.length - 5} more` : ""}. 
+
+CRITICAL: Do NOT try to answer. Simply tell the user which documents contain info and ask them to specify which one they want to know about. Keep it to 1-2 sentences.`;
+} else if (documentNames.length > 1) {
+  // If 2-3 documents, mention them but provide top results
+  contextText = `Found information in: ${documentNames.join(", ")}.
+
+Relevant content (may be long, read carefully):
+${searchResult.text}
+
+CRITICAL INSTRUCTION: You have lots of context above, but the user wants a SHORT answer (2-3 sentences max). Extract ONLY what directly answers their question. Do NOT copy chunks verbatim. Summarize like a human would explain it to a friend.`;
+} else {
+  // Single document or same document chunks - provide comprehensive context
+  contextText = `Found in ${documentNames[0] || 'knowledge base'}:
+
+${searchResult.text}
+
+CRITICAL INSTRUCTION: The content above may be very long, but you MUST respond in 2-3 sentences maximum. Read everything, understand it, then give a brief, direct answer. Think: "How would I explain this to a friend in one breath?" Do NOT dump the entire content.`;
+}
 
 
   const response = await generateText({

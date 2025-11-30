@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { useState } from "react";
 import { Button } from "@workspace/ui/components/button";
 import {
   Dialog,
@@ -12,13 +11,15 @@ import {
   DialogTitle,
 } from "@workspace/ui/components/dialog";
 import { api } from "@workspace/backend/_generated/api";
+import { toast } from "sonner";
 import type { PublicFile } from "@workspace/backend/private/files";
+
 interface DeleteFileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: PublicFile | null;
   onDeleted?: () => void;
-};
+}
 
 export const DeleteFileDialog = ({
   open,
@@ -27,23 +28,31 @@ export const DeleteFileDialog = ({
   onDeleted,
 }: DeleteFileDialogProps) => {
   const deleteFile = useMutation(api.private.files.deleteFile);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
     if (!file) {
-        return;
-    }
-    setIsDeleting(true);
-    try {
-    await deleteFile({ entryId: file.id });
-    onDeleted?.();
-    onOpenChange(false);
-    } catch (error) {
-    console.error(error);
-    } finally {
-    setIsDeleting(false);
+      return;
     }
 
+    // Close dialog immediately
+    onOpenChange(false);
+
+    // Process deletion in background
+    (async () => {
+      try {
+        await deleteFile({ entryId: file.id });
+
+        // Trigger refresh (notification will be shown via NotificationsBell)
+        if (onDeleted) {
+          onDeleted();
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error(
+          error instanceof Error ? error.message : `Failed to delete "${file.name}"`
+        );
+      }
+    })();
   };
 
   return (
@@ -74,21 +83,20 @@ export const DeleteFileDialog = ({
 
 
       <DialogFooter>
-  <Button
-    disabled={isDeleting}
-    onClick={() => onOpenChange(false)}
-    variant="outline"
-  >
-    Cancel
-  </Button>
-  <Button
-    disabled={isDeleting || !file}
-    onClick={handleDelete}
-    variant="destructive"
-  >
-    {isDeleting ? "Deleting..." : "Delete"}
-  </Button>
-</DialogFooter>
+        <Button
+          onClick={() => onOpenChange(false)}
+          variant="outline"
+        >
+          Cancel
+        </Button>
+        <Button
+          disabled={!file}
+          onClick={handleDelete}
+          variant="destructive"
+        >
+          Delete
+        </Button>
+      </DialogFooter>
 
 
 
