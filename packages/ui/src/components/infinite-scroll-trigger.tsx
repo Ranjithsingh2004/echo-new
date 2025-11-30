@@ -1,5 +1,5 @@
-import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
+import { Loader2Icon } from "lucide-react";
 
 interface InfiniteScrollTriggerProps {
   canLoadMore: boolean;
@@ -20,25 +20,18 @@ export const InfiniteScrollTrigger = ({
   className,
   ref,
 }: InfiniteScrollTriggerProps) => {
-  let text = loadMoreText;
+  // Hide completely when no more items to load
+  if (!canLoadMore && !isLoadingMore) {
+    return null;
+  }
 
-  if (isLoadingMore) {
-    text = "Loading...";
-  } else if (!canLoadMore) {
-        text = noMoreText;
-        }
-
-        return (
-            <div className={cn("flex w-full justify-center py-2", className)} ref={ref}>
-                <Button
-                disabled={!canLoadMore || isLoadingMore}
-                onClick={onLoadMore}
-                size="sm"
-                variant="ghost"
-                >
-                {text}
-                </Button>
-            </div>
-    );
+  return (
+    <div className={cn("flex w-full justify-center py-4", className)} ref={ref}>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2Icon className="h-4 w-4 animate-spin" />
+        <span>Loading more...</span>
+      </div>
+    </div>
+  );
 }
 

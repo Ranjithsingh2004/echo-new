@@ -19,134 +19,322 @@ function guessMimeType(filename: string, bytes: ArrayBuffer): string {
   );
 };
 
+// Step 1: Generate upload URL for direct storage upload
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (identity === null) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Identity not found",
+      });
+    }
+
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+// Retry failed file processing
+export const retryFileProcessing = mutation({
+  args: {
+    entryId: vEntryId,
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (identity === null) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Identity not found",
+      });
+    }
+
+    const orgId = identity.orgId as string;
+
+    if (!orgId) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Organization not found",
+      });
+    }
+
+    // Get the entry
+    const entry = await rag.getEntry(ctx, { entryId: args.entryId });
+
+    if (!entry) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "File not found",
+      });
+    }
+
+    const metadata = entry.metadata as EntryMetadata | undefined;
+
+    if (metadata?.uploadedBy !== orgId) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
+      });
+    }
+
+    // Determine namespace
+    let namespace = orgId;
+    if (metadata?.knowledgeBaseId) {
+      const knowledgeBase = await ctx.runQuery(
+        internal.system.knowledgeBases.getByKnowledgeBaseId,
+        { knowledgeBaseId: metadata.knowledgeBaseId }
+      );
+
+      if (knowledgeBase) {
+        namespace = knowledgeBase.ragNamespace;
+      }
+    }
+
+    // Schedule retry (the placeholder will be deleted and replaced with new chunks)
+    if (metadata?.storageId && metadata?.originalFilename && metadata?.displayName) {
+      await ctx.scheduler.runAfter(0, internal.system.fileProcessor.processFile, {
+        storageId: metadata.storageId,
+        filename: metadata.originalFilename,
+        displayName: metadata.displayName,
+        mimeType: "text/plain", // Default, will be detected
+        namespace,
+        category: metadata.category,
+        knowledgeBaseId: metadata.knowledgeBaseId,
+        sourceType: metadata.sourceType ?? "uploaded",
+        orgId,
+        entryId: args.entryId,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+// Step 2: Create file record and trigger async processing
+export const createFileAfterUpload = mutation({
+  args: {
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    displayName: v.string(),
+    mimeType: v.string(),
+    category: v.optional(v.string()),
+    knowledgeBaseId: v.optional(v.string()),
+    sourceType: v.optional(v.union(v.literal("uploaded"), v.literal("scraped"))),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (identity === null) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Identity not found",
+      });
+    }
+
+    const orgId = identity.orgId as string;
+
+    if (!orgId) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Organization not found",
+      });
+    }
+
+    const subscription = await ctx.runQuery(
+      internal.system.subscriptions.getByOrganizationId,
+      { organizationId: orgId }
+    );
+
+    if (subscription?.status !== "active") {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Missing subscription",
+      });
+    }
+
+    // Determine which namespace to use
+    let namespace = orgId;
+
+    if (args.knowledgeBaseId) {
+      const knowledgeBase = await ctx.runQuery(
+        internal.system.knowledgeBases.getByKnowledgeBaseId,
+        { knowledgeBaseId: args.knowledgeBaseId }
+      );
+
+      if (!knowledgeBase) {
+        throw new ConvexError({
+          code: "NOT_FOUND",
+          message: "Knowledge base not found",
+        });
+      }
+
+      if (knowledgeBase.organizationId !== orgId) {
+        throw new ConvexError({
+          code: "UNAUTHORIZED",
+          message: "Knowledge base does not belong to your organization",
+        });
+      }
+
+      namespace = knowledgeBase.ragNamespace;
+    }
+
+    const displayName = args.displayName.trim() || args.filename;
+
+    console.log(`[createFileAfterUpload] Creating placeholder for "${displayName}" in namespace ${namespace}, KB: ${args.knowledgeBaseId}`);
+
+    // Create a placeholder entry with "processing" status
+    const result = await rag.add(ctx, {
+      namespace: namespace,
+      text: "", // Empty initially
+      key: displayName,
+      title: displayName,
+      metadata: {
+        storageId: args.storageId,
+        uploadedBy: orgId,
+        displayName,
+        originalFilename: args.filename,
+        category: args.category ?? null,
+        knowledgeBaseId: args.knowledgeBaseId ?? null,
+        sourceType: args.sourceType ?? "uploaded",
+        chunkIndex: 0,
+        totalChunks: 1,
+        processingStatus: "processing",
+      } as EntryMetadata,
+    });
+
+    console.log(`[createFileAfterUpload] Placeholder created with entryId: ${result.entryId}`);
+
+    // Create upload notification (simple confirmation, not 'processing')
+    console.log(`[createFileAfterUpload] Creating upload notification for "${displayName}"`);
+    try {
+      await ctx.db.insert("notifications", {
+        organizationId: orgId,
+        type: "file_processing",
+        title: "📁 File added",
+        message: `"${displayName}" has been added. You'll be notified when it's ready to use.`,
+        fileId: result.entryId,
+        fileName: displayName,
+        read: false,
+        createdAt: Date.now(),
+      });
+      console.log(`[createFileAfterUpload] Upload notification created successfully`);
+    } catch (notifError) {
+      console.error(`[createFileAfterUpload] Failed to create upload notification:`, notifError);
+    }
+
+    // Track file change for reactive queries
+    try {
+      await ctx.db.insert("fileChangeTracker", {
+        organizationId: orgId,
+        knowledgeBaseId: args.knowledgeBaseId ?? undefined,
+        lastChange: Date.now(),
+        changeType: "add",
+      });
+    } catch (error) {
+      console.error(`[createFileAfterUpload] Failed to track file change:`, error);
+    }
+
+    // Schedule async processing
+    await ctx.scheduler.runAfter(0, internal.system.fileProcessor.processFile, {
+      storageId: args.storageId,
+      filename: args.filename,
+      displayName,
+      mimeType: args.mimeType,
+      namespace,
+      category: args.category ?? null,
+      knowledgeBaseId: args.knowledgeBaseId ?? null,
+      sourceType: args.sourceType ?? "uploaded",
+      orgId,
+      entryId: result.entryId,
+    });
+
+    return result.entryId;
+  },
+});
+
 export const deleteFile = mutation({
   args: {
     entryId: vEntryId,
   },
-  handler: async (ctx,args) => {
-
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
 
-        if (identity === null) {
-          throw new ConvexError({
-            code: "UNAUTHORIZED",
-            message: "Identity not found",
-          });
-        }
-
-        const orgId = identity.orgId as string;
-
-        if (!orgId) {
-          throw new ConvexError({
-            code: "UNAUTHORIZED",
-            message: "Organization not found",
-          });
-        }
-
-const entry = await rag.getEntry(ctx, {
-  entryId: args.entryId,
-});
-
-if (!entry) {
-  throw new ConvexError({
-    code: "NOT_FOUND",
-    message: "Entry not found",
-  });
-}
-
-if (entry.metadata?.uploadedBy !== orgId) {
-  throw new ConvexError({
-    code: "UNAUTHORIZED",
-    message: "Invalid Organization ID",
-  });
-}
-
-const metadata = entry.metadata as EntryMetadata | undefined;
-const storageId = metadata?.storageId;
-const displayName = metadata?.displayName;
-const knowledgeBaseId = metadata?.knowledgeBaseId;
-
-// Determine the correct namespace to search in
-let namespaceString = orgId; // Default fallback
-
-if (knowledgeBaseId) {
-  const knowledgeBase = await ctx.db
-    .query("knowledgeBases")
-    .withIndex("by_knowledge_base_id", (q) => q.eq("knowledgeBaseId", knowledgeBaseId))
-    .unique();
-
-  if (knowledgeBase) {
-    namespaceString = knowledgeBase.ragNamespace;
-    console.log(`[deleteFile] Using KB namespace: ${namespaceString}`);
-  } else {
-    console.log(`[deleteFile] KB not found, using orgId namespace: ${namespaceString}`);
-  }
-}
-
-const namespace = await rag.getNamespace(ctx, {
-  namespace: namespaceString,
-});
-
-if (!namespace) {
-  throw new ConvexError({
-    code: "NOT_FOUND",
-    message: "Namespace not found",
-  });
-}
-
-// Find and delete ALL chunks of this file
-if (displayName && namespace) {
-  const allEntries = await rag.list(ctx, {
-    namespaceId: namespace.namespaceId,
-    paginationOpts: { numItems: 1000, cursor: null }
-  });
-
-  let deletedCount = 0;
-  for (const fileEntry of allEntries.page) {
-    const fileMetadata = fileEntry.metadata as EntryMetadata | undefined;
-    // Match by displayName (primary) and optionally storageId
-    // If storageId is null/undefined (stuck file), still delete by displayName
-    const nameMatches = fileMetadata?.displayName === displayName;
-    const storageMatches = !storageId || fileMetadata?.storageId === storageId;
-
-    if (nameMatches && storageMatches) {
-      await rag.deleteAsync(ctx, {
-        entryId: fileEntry.entryId
+    if (identity === null) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Identity not found",
       });
-      deletedCount++;
-      console.log(`[deleteFile] Deleted chunk ${deletedCount}: ${fileEntry.entryId}`);
     }
-  }
 
-  console.log(`[deleteFile] Deleted ${deletedCount} total chunks for "${displayName}"`);
+    const orgId = identity.orgId as string;
 
-  if (deletedCount === 0) {
-    console.warn(`[deleteFile] No chunks found for "${displayName}" - file might be corrupted`);
-  }
-} else {
-  // Fallback: just delete the single entry
-  console.log(`[deleteFile] Fallback: deleting single entry ${args.entryId}`);
-  await rag.deleteAsync(ctx, {
-    entryId: args.entryId
-  });
-}
+    if (!orgId) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Organization not found",
+      });
+    }
 
-// Delete the storage file AFTER all chunks are deleted (only once, with error handling)
-if (storageId) {
-  try {
-    await ctx.storage.delete(storageId as Id<"_storage">);
-    console.log(`[deleteFile] Successfully deleted storage file ${storageId}`);
-  } catch (error) {
-    // Storage might already be deleted, doesn't exist, or is corrupted - this is OK
-    console.log(`[deleteFile] Could not delete storage ${storageId} (may already be deleted):`, error);
-  }
-} else {
-  console.log(`[deleteFile] No storageId found - RAG entries deleted but storage was already gone`);
-}
+    const entry = await rag.getEntry(ctx, {
+      entryId: args.entryId,
+    });
 
+    if (!entry) {
+      // File already deleted or doesn't exist
+      console.log(`[deleteFile] Entry ${args.entryId} not found - already deleted`);
+      return; // Silently succeed - file is already gone
+    }
 
+    if (entry.metadata?.uploadedBy !== orgId) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "Invalid Organization ID",
+      });
+    }
 
+    const metadata = entry.metadata as EntryMetadata | undefined;
+    const storageId = metadata?.storageId;
+    const displayName = metadata?.displayName ?? metadata?.originalFilename ?? "Unknown file";
+    const knowledgeBaseId = metadata?.knowledgeBaseId;
 
+    // Determine the correct namespace
+    let namespaceString = orgId;
+
+    if (knowledgeBaseId) {
+      const knowledgeBase = await ctx.db
+        .query("knowledgeBases")
+        .withIndex("by_knowledge_base_id", (q) => q.eq("knowledgeBaseId", knowledgeBaseId))
+        .unique();
+
+      if (knowledgeBase) {
+        namespaceString = knowledgeBase.ragNamespace;
+      }
+    }
+
+    // Schedule async deletion (no initial notification - just delete and notify when done)
+    await ctx.scheduler.runAfter(0, internal.system.fileProcessor.deleteFileChunks, {
+      entryId: args.entryId,
+      displayName: displayName,
+      storageId: storageId ?? null,
+      namespace: namespaceString,
+      orgId,
+    });
+
+    // Track file change for reactive queries
+    try {
+      await ctx.db.insert("fileChangeTracker", {
+        organizationId: orgId,
+        knowledgeBaseId: knowledgeBaseId ?? undefined,
+        lastChange: Date.now(),
+        changeType: "delete",
+      });
+    } catch (error) {
+      console.error(`[deleteFile] Failed to track file change:`, error);
+    }
+
+    console.log(`[deleteFile] Scheduled async deletion for "${displayName}"`);
   },
 });
 
@@ -333,6 +521,15 @@ export const list = query({
           });
         }
 
+        // Watch file change tracker to make this query reactive
+        const latestChange = await ctx.db
+          .query("fileChangeTracker")
+          .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+          .order("desc")
+          .first();
+        
+        console.log(`[files.list] Query triggered for org ${orgId}, latest change:`, latestChange?.changeType, latestChange?.lastChange);
+
         // If knowledgeBaseId is provided, query that specific namespace
         if (args.knowledgeBaseId) {
           const kbId = args.knowledgeBaseId;
@@ -361,21 +558,39 @@ export const list = query({
               return { page: [], isDone: true, continueCursor: "" };
             }
 
+            // Fetch MORE items than requested to account for deduplication
+            // If requesting 10 files, fetch up to 100 chunks (files can have many chunks)
+            const requestedNumItems = args.paginationOpts.numItems;
+            const fetchNumItems = Math.min(requestedNumItems * 10, 100);
+
             const results = await rag.list(ctx, {
               namespaceId: namespace.namespaceId,
-              paginationOpts: args.paginationOpts,
+              paginationOpts: {
+                ...args.paginationOpts,
+                numItems: fetchNumItems,
+              },
             });
+
+            console.log(`[files.list] RAG returned ${results.page.length} entries for KB ${kbId}`);
 
             const files = await Promise.all(
               results.page.map((entry) => convertEntryToPublicFile(ctx, entry))
             );
 
             // Deduplicate files by displayName (only show first chunk of each file)
-            const uniqueFiles = deduplicateFiles(files);
+            const allUniqueFiles = deduplicateFiles(files);
+
+            console.log(`[files.list] After deduplication: ${allUniqueFiles.length} unique files`);
+
+            // Take only the requested number of unique files
+            const uniqueFiles = allUniqueFiles.slice(0, requestedNumItems);
+
+            // Mark as done if we got fewer unique files than requested, OR if RAG says it's done
+            const isDone = allUniqueFiles.length < requestedNumItems || results.isDone;
 
             return {
               page: uniqueFiles,
-              isDone: results.isDone,
+              isDone,
               continueCursor: results.continueCursor,
             };
           } catch (error) {
@@ -435,9 +650,11 @@ export const list = query({
         const pageSize = args.paginationOpts.numItems;
         const paginatedFiles = allFiles.slice(0, pageSize);
 
+        // isDone is true when total files is less than or equal to page size
+        // (not when paginatedFiles < pageSize, which fails when exactly pageSize items)
         return {
           page: paginatedFiles,
-          isDone: paginatedFiles.length < pageSize,
+          isDone: allFiles.length <= pageSize,
           continueCursor: "",
         };
   },
@@ -466,6 +683,7 @@ type EntryMetadata = {
   sourceType: "uploaded" | "scraped";
   chunkIndex?: number;
   totalChunks?: number;
+  processingStatus?: "pending" | "processing" | "ready" | "error";
 };
 
 
@@ -494,8 +712,16 @@ async function convertEntryToPublicFile(
     const extensionSource = metadata?.originalFilename || displayName;
   const extension = extensionSource.split(".").pop()?.toLowerCase() || "txt";
 
-let status: "ready" | "processing" | "error" = "error";
-if (entry.status === "ready") {
+// Determine status based on processingStatus metadata
+let status: "ready" | "processing" | "error" = "processing";
+if (metadata?.processingStatus === "ready") {
+  status = "ready";
+} else if (metadata?.processingStatus === "error") {
+  status = "error";
+} else if (metadata?.processingStatus === "processing") {
+  status = "processing";
+} else if (entry.status === "ready") {
+  // Legacy entries without processingStatus - assume ready
   status = "ready";
 } else if (entry.status === "pending") {
   status = "processing";
@@ -537,6 +763,7 @@ return {
 
 /**
  * Deduplicate files by displayName, keeping only the first chunk
+ * Prioritizes: processing > ready > error (to show upload progress)
  * @param files Array of files to deduplicate
  * @returns Deduplicated array of files
  */
@@ -544,10 +771,25 @@ function deduplicateFiles(files: PublicFile[]): PublicFile[] {
   const seen = new Map<string, PublicFile>();
 
   for (const file of files) {
-    // Use displayName + storageId as unique key
-    const key = file.name;
+    // Match frontend deduplication: name + knowledgeBaseId
+    const key = `${file.name}-${file.knowledgeBaseId ?? "default"}`;
 
-    if (!seen.has(key)) {
+    const existing = seen.get(key);
+    
+    // If no existing entry, add this one
+    if (!existing) {
+      seen.set(key, file);
+      continue;
+    }
+
+    // Prioritize processing status (to show upload progress)
+    // processing > ready > error
+    const statusPriority = { processing: 3, ready: 2, error: 1 };
+    const existingPriority = statusPriority[existing.status] || 0;
+    const currentPriority = statusPriority[file.status] || 0;
+
+    // Replace if current has higher priority
+    if (currentPriority > existingPriority) {
       seen.set(key, file);
     }
   }

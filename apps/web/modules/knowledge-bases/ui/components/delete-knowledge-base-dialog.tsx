@@ -43,7 +43,16 @@ export const DeleteKnowledgeBaseDialog = ({
       onOpenChange(false);
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.data || "Failed to delete knowledge base");
+      
+      // Extract the message from ConvexError
+      const errorMessage = 
+        error?.data?.message || 
+        error?.message || 
+        "Failed to delete knowledge base";
+      
+      toast.error(errorMessage, {
+        duration: 6000, // Show longer for detailed messages
+      });
     } finally {
       setIsDeleting(false);
     }

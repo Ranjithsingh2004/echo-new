@@ -243,15 +243,32 @@ export const CreateChatbotDialog = ({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="system-prompt">Custom System Prompt</Label>
+                <Label htmlFor="system-prompt">Custom System Prompt (Optional)</Label>
                 <Textarea
                   id="system-prompt"
-                  placeholder="Optional: Custom AI behavior instructions"
+                  placeholder="Example: You are a friendly tech support assistant for our SaaS platform. Be patient with non-technical users and always offer to escalate complex issues."
                   value={form.customSystemPrompt}
                   onChange={(e) => setForm({ ...form, customSystemPrompt: e.target.value })}
                   rows={4}
+                  className="resize-none"
                 />
-                <p className="text-xs text-muted-foreground">Customize AI personality and behavior</p>
+                <div className="rounded-md bg-blue-50 dark:bg-blue-950/20 p-3 text-xs space-y-2">
+                  <p className="font-medium text-blue-900 dark:text-blue-100">💡 Prompt Template Guide:</p>
+                  <p className="text-blue-800 dark:text-blue-200">
+                    Define your AI's <strong>personality and brand voice</strong>. Our system automatically handles:
+                  </p>
+                  <ul className="list-disc list-inside text-blue-700 dark:text-blue-300 space-y-1 ml-2">
+                    <li>Searching your knowledge base</li>
+                    <li>Escalating to human agents</li>
+                    <li>Resolving conversations</li>
+                  </ul>
+                  <p className="text-blue-800 dark:text-blue-200 mt-2">
+                    <strong>Good example:</strong> "You are a helpful assistant for Acme Corp. Use friendly, professional language and always prioritize customer satisfaction."
+                  </p>
+                  <p className="text-blue-600 dark:text-blue-400 italic">
+                    Leave blank to use our default empathetic AI assistant
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">

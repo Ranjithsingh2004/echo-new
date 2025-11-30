@@ -28,6 +28,7 @@ import {
 } from "@workspace/ui/components/sidebar";
 import { cn } from "@workspace/ui/lib/utils";
 import ThemeToggle from "@/modules/customization/ui/components/ThemeToggle"; // adjust path if needed
+import { NotificationsBell } from "@/components/notifications-bell";
 
 const customerSupportItems = [
   { title: "Conversations", url: "/conversations", icon: InboxIcon },
@@ -161,9 +162,12 @@ export const DashboardSidebar = () => {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            {/* Theme toggle placed left of user button for quick access */}
+            {/* Theme toggle and notifications placed left of user button for quick access */}
             <div className="flex items-center justify-between w-full gap-2">
-              <ThemeToggle className="mr-auto" />
+              <div className="flex items-center gap-1">
+                <ThemeToggle />
+                <NotificationsBell />
+              </div>
               <UserButton
                 showName
                 appearance={{

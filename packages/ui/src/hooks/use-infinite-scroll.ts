@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseInfiniteScrollProps {
   status: "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted",
@@ -15,12 +15,21 @@ export const useInfiniteScroll = ({
   observerEnabled = true,
 }: UseInfiniteScrollProps) => {
   const topElementRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLoadMore = useCallback(() => {
-    if (status === "CanLoadMore") {
+    if (status === "CanLoadMore" && !isLoading) {
+      setIsLoading(true);
       loadMore(loadSize);
     }
   }, [status, loadMore, loadSize]);
+
+  // Reset loading state when status changes away from loading states
+  useEffect(() => {
+    if (status !== "LoadingMore" && status !== "LoadingFirstPage") {
+      setIsLoading(false);
+    }
+  }, [status]);
 
   useEffect(() => {
     const topElement = topElementRef.current;

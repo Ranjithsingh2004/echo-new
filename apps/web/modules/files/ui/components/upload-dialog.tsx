@@ -1,6 +1,6 @@
 "use client";
 
-import { useAction, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import {
   Dialog,
@@ -35,7 +35,8 @@ export const UploadDialog = ({
   onOpenChange,
   onFileUploaded,
 }: UploadDialogProps) => {
-  const addFile = useAction(api.private.files.addFile);
+  const generateUploadUrl = useMutation(api.private.files.generateUploadUrl);
+  const createFileAfterUpload = useMutation(api.private.files.createFileAfterUpload);
   const knowledgeBases = useQuery(api.private.knowledgeBases.list);
 
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -73,35 +74,56 @@ const handleUpload = async () => {
     return;
   }
 
-  setIsUploading(true);
-  try {
-    const blob = uploadedFiles[0];
+  const blob = uploadedFiles[0];
 
-        if(!blob){
-          return;
-        }
-
-        const originalFilename = blob.name || "uploaded-file";
-        await addFile({
-      bytes: await blob.arrayBuffer(),
-      filename: originalFilename,
-      displayName,
-      mimeType: blob.type || "text/plain",
-      category: uploadForm.category,
-      knowledgeBaseId: uploadForm.knowledgeBaseId || undefined,
-      sourceType: "uploaded",
-    });
-
-    onFileUploaded?.();
-    handleCancel();
-
-
-
-  } catch (error) {
-    console.error(error);
-  } finally {
-    setIsUploading(false);
+  if(!blob){
+    return;
   }
+
+  const originalFilename = blob.name || "uploaded-file";
+
+  // Close dialog immediately
+  handleCancel();
+
+  // Process upload in background
+  (async () => {
+    try {
+      // Step 1: Get upload URL
+      const uploadUrl = await generateUploadUrl();
+
+      // Step 2: Upload file directly to Convex storage
+      const uploadResult = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": blob.type || "application/octet-stream" },
+        body: blob,
+      });
+
+      if (!uploadResult.ok) {
+        throw new Error(`Upload failed: ${uploadResult.statusText}`);
+      }
+
+      const { storageId } = await uploadResult.json();
+
+      // Step 3: Create file record and trigger async processing
+      await createFileAfterUpload({
+        storageId,
+        filename: originalFilename,
+        displayName,
+        mimeType: blob.type || "text/plain",
+        category: uploadForm.category || undefined,
+        knowledgeBaseId: uploadForm.knowledgeBaseId || undefined,
+        sourceType: "uploaded",
+      });
+
+      // Trigger refresh (notification will be shown via NotificationsBell)
+      if (onFileUploaded) {
+        onFileUploaded();
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to upload file");
+    }
+  })();
 }
 
 
@@ -119,50 +141,71 @@ const handleScrape = async () => {
     return;
   }
 
-  setIsScraping(true);
-  try {
-    // Use Next.js API route to bypass CORS
-    const response = await fetch("/api/scrape", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: scrapeForm.url }),
-    });
+  // Close dialog immediately
+  handleCancel();
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to scrape URL");
+  // Process scraping in background
+  (async () => {
+    try {
+      // Use Next.js API route to bypass CORS
+      const response = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scrapeForm.url }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to scrape URL");
+      }
+
+      const { content, title } = await response.json();
+
+      if (!content || content.length < 50) {
+        throw new Error("No meaningful content found on the page");
+      }
+
+      // Convert text to blob
+      const blob = new Blob([content], { type: "text/plain" });
+      const hostname = new URL(scrapeForm.url).hostname;
+      const filename = `${title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-${hostname}-${Date.now()}.txt`;
+
+      // Step 1: Get upload URL
+      const uploadUrl = await generateUploadUrl();
+
+      // Step 2: Upload content directly to Convex storage
+      const uploadResult = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: blob,
+      });
+
+      if (!uploadResult.ok) {
+        throw new Error(`Upload failed: ${uploadResult.statusText}`);
+      }
+
+      const { storageId } = await uploadResult.json();
+
+      // Step 3: Create file record and trigger async processing
+      await createFileAfterUpload({
+        storageId,
+        filename,
+        displayName,
+        mimeType: "text/plain",
+        category: scrapeForm.category || undefined,
+        knowledgeBaseId: scrapeForm.knowledgeBaseId || undefined,
+        sourceType: "scraped",
+      });
+
+      // Trigger refresh (notification will be shown via NotificationsBell)
+      if (onFileUploaded) {
+        onFileUploaded();
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to scrape website");
     }
-
-    const { content, title } = await response.json();
-
-    if (!content || content.length < 50) {
-      throw new Error("No meaningful content found on the page");
-    }
-
-    // Convert text to blob
-    const blob = new Blob([content], { type: "text/plain" });
-    const hostname = new URL(scrapeForm.url).hostname;
-    const filename = `${title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-${hostname}-${Date.now()}.txt`;
-
-    await addFile({
-      bytes: await blob.arrayBuffer(),
-      filename,
-      displayName,
-      mimeType: "text/plain",
-      category: scrapeForm.category,
-      knowledgeBaseId: scrapeForm.knowledgeBaseId || undefined,
-      sourceType: "scraped",
-    });
-
-    toast.success("Website content scraped and added successfully");
-    onFileUploaded?.();
-    handleCancel();
-  } catch (error) {
-    console.error(error);
-    toast.error(error instanceof Error ? error.message : "Failed to scrape website");
-  } finally {
-    setIsScraping(false);
-  }
+  })();
 };
 
 const handleCancel = () => {
