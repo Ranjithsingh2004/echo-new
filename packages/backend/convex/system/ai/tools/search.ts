@@ -69,33 +69,27 @@ const searchResult = await rag.search(ctx, {
 console.log(`[search] Found ${searchResult.entries.length} results for query: "${args.query}"`);
 console.log(`[search] Result titles:`, searchResult.entries.map(e => e.title).join(", "));
 
-// Check if multiple different documents were found
-const uniqueDocuments = new Set(searchResult.entries.map(e => e.metadata?.displayName || e.title).filter(Boolean));
-const documentNames = Array.from(uniqueDocuments);
-
-let contextText = "";
-
-if (documentNames.length > 3) {
-  // If more than 3 documents, list them and ask user to clarify
-  contextText = `Found information in multiple documents: ${documentNames.slice(0, 5).join(", ")}${documentNames.length > 5 ? `, and ${documentNames.length - 5} more` : ""}. 
-
-CRITICAL: Do NOT try to answer. Simply tell the user which documents contain info and ask them to specify which one they want to know about. Keep it to 1-2 sentences.`;
-} else if (documentNames.length > 1) {
-  // If 2-3 documents, mention them but provide top results
-  contextText = `Found information in: ${documentNames.join(", ")}.
-
-Relevant content (may be long, read carefully):
-${searchResult.text}
-
-CRITICAL INSTRUCTION: You have lots of context above, but the user wants a SHORT answer (2-3 sentences max). Extract ONLY what directly answers their question. Do NOT copy chunks verbatim. Summarize like a human would explain it to a friend.`;
-} else {
-  // Single document or same document chunks - provide comprehensive context
-  contextText = `Found in ${documentNames[0] || 'knowledge base'}:
+// Just provide the search results context directly without document filtering
+const contextText = `Search results for "${args.query}":
 
 ${searchResult.text}
 
-CRITICAL INSTRUCTION: The content above may be very long, but you MUST respond in 2-3 sentences maximum. Read everything, understand it, then give a brief, direct answer. Think: "How would I explain this to a friend in one breath?" Do NOT dump the entire content.`;
-}
+CRITICAL INSTRUCTION: The content above may be very long and from multiple sources, but you MUST respond in 2-3 sentences maximum. Read everything, understand it, then give a brief, direct answer to the user's question. Think: "How would I explain this to a friend in one breath?" 
+
+Do NOT:
+- Ask which document they want
+- List document names
+- Say "I found information in multiple documents"
+- Copy chunks verbatim
+
+DO:
+- Give the most relevant answer directly
+- Combine info from multiple sources if needed
+- Keep it under 3 sentences
+- Sound human and helpful
+
+If the answer genuinely isn't in the search results, say: "I don't have info on that. Want me to connect you with our team?"`;
+
 
 
   const response = await generateText({
