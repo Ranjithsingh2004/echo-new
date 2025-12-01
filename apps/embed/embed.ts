@@ -56,10 +56,10 @@ import { chatBubbleIcon, closeIcon } from './icons';
     button.id = 'echo-widget-button';
     button.style.cssText = `
       position: fixed;
-      ${position === 'bottom-right' ? 'right: 20px;' : 'left: 20px;'}
-      bottom: 20px;
-      width: 60px;
-      height: 60px;
+      ${position === 'bottom-right' ? 'right: 24px;' : 'left: 24px;'}
+      bottom: 24px;
+      width: 56px;
+      height: 56px;
       border-radius: 50%;
       background: #3b82f6;
       color: white;
@@ -70,7 +70,9 @@ import { chatBubbleIcon, closeIcon } from './icons';
       align-items: center;
       justify-content: center;
       box-shadow: 0 4px 24px rgba(59, 130, 246, 0.35);
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
+      opacity: 0;
+      visibility: hidden;
     `;
     
     button.addEventListener('click', toggleWidget);
@@ -89,12 +91,12 @@ import { chatBubbleIcon, closeIcon } from './icons';
     container.id = 'echo-widget-container';
     container.style.cssText = `
       position: fixed;
-      ${position === 'bottom-right' ? 'right: 20px;' : 'left: 20px;'}
-      bottom: 90px;
-      width: 400px;
-      height: 600px;
-      max-width: calc(100vw - 40px);
-      max-height: calc(100vh - 110px);
+      ${position === 'bottom-right' ? 'right: 24px;' : 'left: 24px;'}
+      bottom: 88px;
+      width: 418px;
+      height: 510px;
+      max-width: calc(100vw - 48px);
+      max-height: calc(100vh - 120px);
       z-index: 999998;
       border-radius: 16px;
       overflow: hidden;
@@ -129,6 +131,9 @@ import { chatBubbleIcon, closeIcon } from './icons';
     if (chatbotId) {
       params.append('chatbotId', chatbotId);
     }
+    // Add cache-busting parameter to force fresh loads during development
+    // Remove this in production or use a version number
+    params.append('_t', Date.now().toString());
     const url = `${EMBED_CONFIG.WIDGET_URL}?${params.toString()}`;
     console.log('[Embed] Building widget URL:', url);
     return url;
@@ -166,13 +171,18 @@ import { chatBubbleIcon, closeIcon } from './icons';
         // Update container size if size is provided
         if (payload.size && container) {
           const sizes = {
-            small: { width: '320px', height: '500px' },
-            medium: { width: '380px', height: '600px' },
-            large: { width: '450px', height: '700px' },
+            small: { width: '368px', height: '460px' },
+            medium: { width: '418px', height: '510px' },
+            large: { width: '468px', height: '560px' },
           };
           const selectedSize = sizes[payload.size as keyof typeof sizes] || sizes.medium;
           container.style.width = selectedSize.width;
           container.style.height = selectedSize.height;
+        }
+        // Show button now that appearance is loaded
+        if (button) {
+          button.style.opacity = '1';
+          button.style.visibility = 'visible';
         }
         break;
     }
