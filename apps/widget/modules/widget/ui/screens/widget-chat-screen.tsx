@@ -62,6 +62,7 @@ export const WidgetChatScreen = () => {
   const [pendingUserMessage, setPendingUserMessage] = useState(false);
   const previousMessageCountRef = useRef(0);
   const previousUserMessageCountRef = useRef(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
    const onBack = () => {
     setConversationId(null);
@@ -130,6 +131,9 @@ export const WidgetChatScreen = () => {
 
     form.reset();
     setPendingUserMessage(true);
+
+    // Scroll to bottom when message is sent
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
     await createMessage({
       threadId: conversation.threadId,
@@ -269,6 +273,7 @@ export const WidgetChatScreen = () => {
               />
             </AIMessage>
           )}
+          <div ref={messagesEndRef} />
         </AIConversationContent>
     </AIConversation>
     {toUIMessages(messages.results ?? [])?.length === 1 && (

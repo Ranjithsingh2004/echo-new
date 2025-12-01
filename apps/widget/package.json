@@ -27,6 +27,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-hook-form": "^7.61.1",
+    "use-stick-to-bottom": "^1.1.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

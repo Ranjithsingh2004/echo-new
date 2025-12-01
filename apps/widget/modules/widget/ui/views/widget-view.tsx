@@ -24,6 +24,8 @@ export const WidgetView = ({ organizationId, chatbotId }: Props) => {
   useEffect(() => {
     if (widgetSettings?.appearance?.primaryColor) {
       document.documentElement.style.setProperty('--primary', widgetSettings.appearance.primaryColor);
+      // Also update the body background to prevent flash
+      document.body.style.setProperty('--primary', widgetSettings.appearance.primaryColor);
     }
   }, [widgetSettings?.appearance?.primaryColor]);
 

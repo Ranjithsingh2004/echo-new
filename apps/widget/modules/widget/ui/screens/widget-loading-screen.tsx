@@ -32,6 +32,28 @@ export const WidgetLoadingScreen = ({ organizationId, chatbotId }: { organizatio
 
   const contactSessionId = useAtomValue(contactSessionIdAtomFamily(organizationId || ""));
 
+  // Fetch widget settings immediately for appearance
+  const widgetSettings = useQuery(
+    api.public.widgetSettings.getChatbotSettings,
+    organizationId
+      ? {
+          organizationId,
+          ...(chatbotId ? { chatbotId } : {}),
+        }
+      : "skip"
+  );
+
+  // Apply custom color as soon as settings are available
+  useEffect(() => {
+    if (widgetSettings?.appearance?.primaryColor) {
+      document.documentElement.style.setProperty('--primary', widgetSettings.appearance.primaryColor);
+    }
+    // Also set the widget settings atom early for the header to use
+    if (widgetSettings && step === "org") {
+      setWidgetSettings(toWidgetSettings(widgetSettings));
+    }
+  }, [widgetSettings?.appearance?.primaryColor, widgetSettings, step, setWidgetSettings]);
+
 
 
 
@@ -127,17 +149,6 @@ export const WidgetLoadingScreen = ({ organizationId, chatbotId }: { organizatio
 
     //step 3
 
-
-    const widgetSettings = useQuery(
-      api.public.widgetSettings.getChatbotSettings,
-      organizationId
-        ? {
-            organizationId,
-            ...(chatbotId ? { chatbotId } : {}),
-          }
-        : "skip"
-    );
-
       useEffect(() => {
         if (step !== "settings") {
           return;
@@ -146,7 +157,8 @@ export const WidgetLoadingScreen = ({ organizationId, chatbotId }: { organizatio
         setLoadingMessage("Loading chatbot settings...");
 
         if (widgetSettings !== undefined) {
-          setWidgetSettings(toWidgetSettings(widgetSettings));
+          const settings = toWidgetSettings(widgetSettings);
+          setWidgetSettings(settings);
 
           console.log('[WidgetLoadingScreen] Got widgetSettings, chatbotId in settings:', (widgetSettings as any)?.chatbotId);
           console.log('[WidgetLoadingScreen] Current chatbotId from URL prop:', chatbotId);

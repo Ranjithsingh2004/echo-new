@@ -29,6 +29,7 @@ import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { VapiFormFields } from "./vapi-form-fields";
 import { LogoManager } from "./logo-manager";
+import { WidgetPreview } from "./widget-preview";
 import { FormSchema } from "../../types";
 import { widgetSettingsSchema } from "../../schemas";
 import { useEffect, useState } from "react";
@@ -312,6 +313,7 @@ return (
                 />
               </div>
             </div>
+            <WidgetPreview chatbot={chatbot} />
           </div>
           <Separator />
           <div className="space-y-4">
